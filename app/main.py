@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import json
+import os
+import uvicorn
 
 from .schemas import ParseAndCreateRequest, Task
 from . import task_service, line_handlers
@@ -99,13 +101,12 @@ async def line_webhook(request: Request):
 
 
 
-# ローカル実行用（`python -m app.main` で起動できるようにしておく）
 if __name__ == "__main__":
-    import uvicorn
+    port = int(os.environ.get("PORT", 8080))
 
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
-        reload=True,
+        port=port,
+        reload=False,
     )
