@@ -6,3 +6,4 @@ google-generativeai
 notion-client
 line-bot-sdk
 pydantic
+pytest
