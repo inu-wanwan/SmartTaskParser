@@ -1,8 +1,8 @@
 from datetime import date
 from typing import Optional
 
-from . import llm_client, notion_client
-from .schemas import Task
+from app.clients import llm_client, notion_client
+from app.models.task import Task
 
 
 def create_task_from_text(

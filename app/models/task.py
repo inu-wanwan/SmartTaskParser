@@ -2,13 +2,6 @@ from datetime import date
 from typing import Optional
 from pydantic import BaseModel
 
-
-class ParseAndCreateRequest(BaseModel):
-    text: str
-    source: str = "line"
-    user_id: Optional[str] = None
-
-
 class Task(BaseModel):
     title: str
     due_date: Optional[date] = None
