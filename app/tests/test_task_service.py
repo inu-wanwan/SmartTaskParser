@@ -1,4 +1,4 @@
-from app.task_service import create_task_from_text
+from app.services.task_service import create_task_from_text
 
 def test_create_task_from_text():
     task = create_task_from_text(
