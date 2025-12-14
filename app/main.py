@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import uvicorn
 
-from app.routers import line_webhook, tasks
+from app.routers import line_webhook, tasks, daily
 
 
 app = FastAPI(
@@ -23,6 +23,7 @@ app.add_middleware(
 
 app.include_router(line_webhook.router)
 app.include_router(tasks.router)
+app.include_router(daily.router)
 
 
 @app.get("/health")
