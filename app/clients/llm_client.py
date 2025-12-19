@@ -64,7 +64,7 @@ def build_prompt(text: str) -> str:
   "due_date": string | null,    // YYYY-MM-DD 形式 or null
   "priority": "low" | "medium" | "high",
   "notes": string | null,
-  "category": "Research" | "Job" | "Private" | "Others"
+  "category": "Research" | "Job" | "Private" | "Classes" | "Others"
 }}
 
 # 現在日付
@@ -85,6 +85,8 @@ def build_prompt(text: str) -> str:
   - 例：ES、面接、説明会、エントリー、OB訪問、SPIなど
 - プライベートな用事 → "Private"
   - 例：買い物、飲み会、ゲーム、掃除、美容院、旅行、ジムなど
+- 授業・講義に関するタスク → "Classes"
+  - 例：レポート、課題、試験、予習、復習、出席など
 - 上記に当てはまらない or 判断が難しい → "Others"
 
 # 出力フォーマット
