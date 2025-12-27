@@ -33,12 +33,22 @@ Gemini（LLM）が解析し、Notion に整理されたタスクとして保存�
 ```
 SmartTaskParser/
 ├── app/
-│   ├── main.py            # FastAPI エントリポイント
-│   ├── llm_client.py      # Gemini によるタスク抽出
-│   ├── notion_client.py   # Notion API クライアント
-│   ├── task_service.py    # タスク変換・登録ロジック
-│   ├── line_handlers.py   # LINE Webhook の処理
-│   └── schemas.py         # Pydantic モデル
+│   ├── main.py                 # FastAPI エントリポイント
+│   ├── clients/
+│   │   ├── llm_client.py        # Gemini によるタスク抽出
+│   │   └── notion_client.py     # Notion API クライアント
+│   ├── handlers/
+│   │   └── line_handlers.py     # LINE Webhook の処理
+│   ├── models/
+│   │   ├── request.py           # リクエストモデル
+│   │   └── task.py              # タスクモデル
+│   ├── routers/
+│   │   ├── line_webhook.py      # LINE Webhook ルーティング
+│   │   ├── tasks.py             # タスク系 API
+│   │   └── daily.py             # デイリー通知 API
+│   └── services/
+│       ├── task_service.py      # タスク変換・登録ロジック
+│       └── line_push_service.py # LINE プッシュ通知
 ├── requirements.txt
 ├── Dockerfile
 └── README.md
@@ -95,11 +105,13 @@ pip install -r requirements.txt
 ### 2. Create `.env`
 
 ```
-NOTION_API_KEY=xxxx
-NOTION_DATABASE_ID=xxxx
-LLM_API_KEY=xxxx
-LINE_CHANNEL_SECRET=xxxx
-LINE_CHANNEL_ACCESS_TOKEN=xxxx
+NOTION_API_KEY=your_notion_api_key
+NOTION_DATABASE_ID=your_notion_database_id
+LLM_API_KEY=your_gemini_api_key
+LINE_CHANNEL_SECRET=your_line_channel_secret
+LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token
+LINE_USER_ID=your_line_user_id
+CRON_SECRET_TOKEN=your_cron_secret_token
 ```
 
 ### 3. Run the API locally
@@ -117,7 +129,7 @@ ngrok http 8000
 Webhook URL:
 
 ```
-https://<ngrok-id>.ngrok.io/line/webhook
+https://<ngrok-id>.ngrok.io/webhook/line
 ```
 
 ---
@@ -154,7 +166,7 @@ Cloud Run → サービス → 編集 → 環境変数
 2. Webhook URL を以下に設定：
 
 ```
-https://<cloud-run-url>/line/webhook
+https://<cloud-run-url>/webhook/line
 ```
 
 3. 「接続確認」 → 200 OK
@@ -173,6 +185,22 @@ https://<cloud-run-url>/line/webhook
 
 ---
 
+## 🔔 Daily Summary (Optional)
+
+CRON などから日次タスクサマリーを送る場合は、以下のエンドポイントを呼び出します。
+
+```
+POST /daily/push
+```
+
+Header:
+
+```
+X-Cron-Token: <CRON_SECRET_TOKEN>
+```
+
+---
+
 ## 🔧 Customization
 
 * **カテゴリ分け（研究 / 就活 / プライベート）**
@@ -186,4 +214,3 @@ https://<cloud-run-url>/line/webhook
 ## 🤝 Contributing
 
 Pull requests, issues, and feature requests are welcome!
-
