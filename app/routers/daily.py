@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Header, HTTPException
-from app.services.task_service import get_daily_tasks_grouped
+from app.services.task_service import get_daily_tasks_grouped_linear
 from app.services.line_push_service import push_daily_summary, verify_cron_token
 
 router = APIRouter()
@@ -12,15 +12,15 @@ def daily_push(cron_token: str = Header(... , alias="X-Cron-Token")):
     """
     try:
         verify_cron_token(cron_token)
-        grouped_tasks = get_daily_tasks_grouped()
+        grouped_tasks = get_daily_tasks_grouped_linear()
         push_daily_summary(grouped_tasks)
         return {
             "ok": True,
             "counts": {
-                "overdue": len(grouped_tasks.get("overdue", [])),
-                "today": len(grouped_tasks.get("today", [])),
-                "no_due": len(grouped_tasks.get("no_due", [])),
-                "upcoming": len(grouped_tasks.get("upcoming", [])),
+                "urgent_overdue": len(grouped_tasks.get("urgent_overdue", [])),
+                "in_progress": len(grouped_tasks.get("in_progress", [])),
+                "current_cycle_todo": len(grouped_tasks.get("current_cycle_todo", [])),
+                "triage": len(grouped_tasks.get("triage", [])),
             }
         }
     except PermissionError as e:

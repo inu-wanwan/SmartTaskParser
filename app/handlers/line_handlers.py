@@ -47,34 +47,32 @@ def _handle_text_message(event: MessageEvent) -> None:
     user_id = event.source.user_id
     text = event.message.text
 
-    # とりあえず全部「タスク登録」として扱う（将来コマンド判定を追加）
+    # タスク登録実行
     task = task_service.create_task_from_text(
         text=text,
         source="line",
         user_id=user_id,
     )
 
-    # 返信メッセージ作成
-    # 期限があるなら表示
-    flex = FlexSendMessage(
-        alt_text="タスク登録",
-        contents=BubbleContainer(
-            body=BoxComponent(
-                layout="vertical",
-                contents=[
-                    TextComponent(text=f"タスク登録しました：{task.title}", wrap=True),
-                    TextComponent(text=f"期限: {task.due_date}", size="sm", color="#888888"),
-                ]
-            ),
-            footer=BoxComponent(
-                layout="vertical",
-                contents=[
-                    ButtonComponent(
-                        action=URIAction(label="Notionで開く", uri=task.page_url)
-                    )
-                ]
-            )
-        )
-    )
+    # テキストメッセージを組み立て
+    reply_lines = [
+        f"✅ タスク登録しました！\n{task.title}",
+    ]
 
-    line_bot_api.reply_message(event.reply_token, flex) 
+    if task.due_date:
+        reply_lines.append(f"📅 期限: {task.due_date}")
+
+    if task.page_url:
+        reply_lines.append(f"🔗 {task.page_url}")
+    else:
+        # URLがない場合のデバッグ用（本番では消してもOK）
+        reply_lines.append("⚠️ URLの取得に失敗しました")
+
+    # リストを改行で結合
+    reply_text = "\n".join(reply_lines)
+
+    # 返信を送信
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=reply_text.strip())
+    )

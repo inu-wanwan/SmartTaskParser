@@ -2,10 +2,18 @@ from datetime import date, datetime, timedelta, time
 from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any, List
 
-from app.clients import llm_client, notion_client
+from app.clients import llm_client, linear_client, notion_client
 from app.models.task import Task
 
 JST = ZoneInfo("Asia/Tokyo")
+
+LINEAR_PROJECT_MAP = {
+    "Research": "484c0d7b-f027-4a08-b433-6e9984b50436",
+    "Job": "760206e3-7e37-4e5e-b4ab-de7855cdd10f",
+    "Private": "4cd90f88-7522-4881-9030-f6933337488d",
+    "Classes": "a7b05be4-e43f-434e-8646-742c79c54b0b",
+    "Others": None,
+}
 
 def create_task_from_text(
     text: str,
@@ -16,10 +24,10 @@ def create_task_from_text(
     自然文のテキストからタスクを生成し、Notion に登録したうえで Task を返す。
 
     フロー:
-      1. llm_client.parse_task_text() で JSON にパース
-      2. JSON から Task モデルを組み立て
-      3. notion_client.create_notion_task() で Notion に保存
-      4. 保存した内容を表す Task を返す
+        1. llm_client.parse_task_text() で JSON にパース
+        2. JSON から Task モデルを組み立て
+        3. notion_client.create_notion_task() で Notion に保存
+        4. 保存した内容を表す Task を返す
     """
 
     # 1. LLM でタスク情報を抽出
@@ -27,9 +35,9 @@ def create_task_from_text(
 
     title = parsed.get("title") or text
     due_date_str = parsed.get("due_date")
-    priority = parsed.get("priority") or "medium"
-    notes = parsed.get("notes")
-    category = parsed.get("category")
+    priority = parsed.get("priority") or 0
+    description = parsed.get("description")
+    label = parsed.get("label")
 
     # 2. 文字列の日付を date 型に変換（不正なら None）
     due_date: Optional[date] = _parse_date_str(due_date_str)
@@ -39,23 +47,21 @@ def create_task_from_text(
         title=title,
         due_date=due_date,
         priority=priority,
-        notes=notes,
+        description=description,
         source=source,
         user_id=user_id,
-        category=category,
+        project_id=LINEAR_PROJECT_MAP.get(label),
     )
 
-    # 4. Notion に保存
-    page_id, page_url = notion_client.create_notion_task(
+    # 4. Linear に保存
+    page_url = linear_client.create_linear_issue(
         title=task.title,
         due_date=task.due_date,
         priority=task.priority,
-        notes=task.notes,
-        source=task.source,
-        category=task.category,
-        user_id=task.user_id,
+        description=task.description,
+        project_id=task.project_id,
     )
-    task.page_id = page_id
+
     task.page_url = page_url
 
     return task
@@ -125,7 +131,7 @@ def get_tasks_within_next_n_days(
 
     return filtered
 
-def get_daily_tasks_grouped(
+def get_daily_tasks_grouped_notion(
         n_days: int = 3,
         limit: int = 50,
     ) -> Dict[str, List[Dict[str, Any]]]:
@@ -169,3 +175,56 @@ def get_daily_tasks_grouped(
         "no_due": no_due,
         "upcoming": upcoming,
     }
+
+def get_daily_tasks_grouped_linear() -> Dict[str, Any]:
+    """
+    Linearの流儀に則り、優先度やステータス、サイクルに基づいてタスクを分類する。
+    Returns:
+        {
+            "cycle": {...},
+            "urgent_overdue": [...],
+            "in_progress": [...],
+            "current_cycle_todo": [...],
+            "triage": [...]
+        }
+    """
+    raw_data = linear_client.fetch_daily_summary_data()
+    
+    assigned_issues = raw_data.get("user", {}).get("assignedIssues", {}).get("nodes", [])
+    team_data = raw_data.get("team", {})
+    active_cycle = team_data.get("activeCycle")
+    active_cycle_id = active_cycle["id"] if active_cycle else None
+    triage_issues = team_data.get("issues", {}).get("nodes", [])
+
+    today = date.today()
+
+    grouped = {
+        "cycle": active_cycle,
+        "urgent_overdue": [],
+        "in_progress": [],
+        "current_cycle_todo": [],
+        "triage": triage_issues,
+    }
+
+    for issue in assigned_issues:
+        state_type = issue["state"]["type"]
+        priority = issue["priority"]
+        due_str = issue.get("dueDate")
+        due_date = date.fromisoformat(due_str) if due_str else None
+
+        # 1. 最優先 (優先度1:Urgent または 期限切れ)
+        if priority == 1 or (due_date and due_date < today):
+            grouped["urgent_overdue"].append(issue)
+            continue
+
+        # 2. 着手中 (started)
+        if state_type == "started":
+            grouped["in_progress"].append(issue)
+            continue
+
+        # 3. 現在のサイクル内の Todo (unstarted)
+        if active_cycle_id and issue.get("cycle") and issue["cycle"]["id"] == active_cycle_id:
+            if state_type == "unstarted":
+                grouped["current_cycle_todo"].append(issue)
+
+    return grouped
