@@ -1,32 +1,35 @@
 from app.services.line_push_service import build_daily_summary
 
 
-def test_build_daily_summary_no_none_and_skip_empty_sections():
+def test_build_daily_summary_has_expected_sections_and_task_content():
     grouped = {
-        "overdue": [],
-        "today": [{"title": "タスクA", "due": "2025-12-14"}],
-        "upcoming": [],
-        "no_due": [],
+        "cycle": {"progress": 0.4},
+        "urgent_overdue": [
+            {"title": "至急タスク", "priority": 1, "state": {"type": "unstarted"}, "dueDate": "2025-12-14"}
+        ],
+        "in_progress": [],
+        "current_cycle_todo": [],
+        "triage": [],
     }
 
     msg = build_daily_summary(grouped)
 
-    # None を出さない
     assert "None" not in msg
-
-    # Todayセクションは出る
-    assert "Today" in msg
-    assert "タスクA" in msg
-
-    # 空セクションは出さない（実装がそうなっている前提）
-    assert "Overdue" not in msg
-    assert "Upcoming" not in msg
-    assert "No Due" not in msg
+    assert "LINEAR DAILY FOCUS" in msg
+    assert "Progress" in msg
+    assert "⚠️[ATTENTION]" in msg
+    assert "至急タスク" in msg
 
 
-def test_build_daily_summary_all_empty_nice_message():
-    grouped = {"overdue": [], "today": [], "upcoming": [], "no_due": []}
+def test_build_daily_summary_all_empty_inbox_zero_message():
+    grouped = {
+        "urgent_overdue": [],
+        "in_progress": [],
+        "current_cycle_todo": [],
+        "triage": [],
+    }
     msg = build_daily_summary(grouped)
 
-    assert "🎉 Nice!" in msg
+    assert "Inbox zero." in msg
+    assert "LINEAR DAILY FOCUS" in msg
     assert "None" not in msg

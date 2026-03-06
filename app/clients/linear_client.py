@@ -39,7 +39,7 @@ class LinearClient(BaseHTTPClient):
 		
 		return data["data"]
 
-	def create_issue(
+	def create_linear_issue(
 		self,
 		title: str,
 		due_date: Optional[date] = None,

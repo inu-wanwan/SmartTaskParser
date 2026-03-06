@@ -1,19 +1,23 @@
-from fastapi import APIRouter, Header, HTTPException
-from app.services.task_service import get_daily_tasks_grouped_linear
-from app.services.line_push_service import push_daily_summary, verify_cron_token
+from fastapi import APIRouter, Depends, Header, HTTPException
+from app.services.task_service import TaskService, get_task_service
+from app.services.line_push_service import LinePushService, get_line_push_service
 
 router = APIRouter()
 
 @router.post("/daily/push")
-def daily_push(cron_token: str = Header(... , alias="X-Cron-Token")):
+def daily_push(
+    cron_token: str = Header(... , alias="X-Cron-Token"),
+    task_service: TaskService = Depends(get_task_service),
+    line_push_service: LinePushService = Depends(get_line_push_service),
+):
     """
     デイリータスクサマリーを LINE にプッシュ送信するエンドポイント。
     CRON ジョブからのリクエストに含まれるトークンを検証する。
     """
     try:
-        verify_cron_token(cron_token)
-        grouped_tasks = get_daily_tasks_grouped_linear()
-        push_daily_summary(grouped_tasks)
+        line_push_service.verify_cron_token(cron_token)
+        grouped_tasks = task_service.get_daily_tasks_grouped_linear()
+        line_push_service.push_daily_summary(grouped_tasks)
         return {
             "ok": True,
             "counts": {

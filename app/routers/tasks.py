@@ -1,17 +1,20 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from app.models.request import ParseAndCreateRequest
 from app.models.task import Task as TaskModel
-from app.services.task_service import create_task_from_text, get_tasks_within_next_n_days
+from app.services.task_service import TaskService, get_task_service
 
 router = APIRouter()
 
 @router.post("/parse-and-create", response_model=TaskModel)
-def parse_and_create_task(req: ParseAndCreateRequest):
+def parse_and_create_task(
+    req: ParseAndCreateRequest,
+    service: TaskService = Depends(get_task_service),
+):
     """
     自然文テキストを解析し、タスクを作成して返すエンドポイント。
     """
     try:
-        task = create_task_from_text(
+        task = service.create_task_from_text(
             text=req.text,
             source=req.source,
             user_id=req.user_id,
@@ -22,5 +25,7 @@ def parse_and_create_task(req: ParseAndCreateRequest):
         raise HTTPException(status_code=500, detail="Internal Server Error")
     
 @router.get("/tasks/upcoming")
-def get_upcoming_tasks():
-    return get_tasks_within_next_n_days(n_days=3, include_overdue=True)
+def get_upcoming_tasks(
+    service: TaskService = Depends(get_task_service),
+):
+    return service.get_tasks_within_next_n_days(n_days=3, include_overdue=True)

@@ -120,6 +120,10 @@ curl http://localhost:8000/health
 
 ローカル確認時は ngrok などで公開して URL を設定してください。
 
+```bash
+ngrok http 8000
+```
+
 ## Daily Summary (Cron)
 
 例:
