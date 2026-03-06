@@ -39,9 +39,9 @@ class LLMClient(BaseClient):
         """
 
         if target == "notion":
-            prompt = build_prompt_notion(text)
+            prompt = self._build_prompt_notion(text)
         else:
-            prompt = build_prompt_linear(text)
+            prompt = self._build_prompt_linear(text)
 
         response = self.model.generate_content(prompt)
 
