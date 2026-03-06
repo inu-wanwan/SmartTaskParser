@@ -29,3 +29,6 @@ htmlcov/
 # IDE editors
 .vscode/
 .idea/
+
+# Claude
+.claude/
