@@ -14,24 +14,6 @@ CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 CRON_SECRET_TOKEN = os.getenv("CRON_SECRET_TOKEN")
 
-# Linearスタイルの優先度アイコン
-PRIORITY_ICONS = {
-    1: "⚡", # Urgent
-    2: "🔴", # High
-    3: "🟡", # Medium
-    4: "🟢", # Low
-    0: "⚪", # No Priority
-}
-
-# ステータス別のアイコン
-STATE_ICONS = {
-    "started": "🔵",    # In Progress
-    "unstarted": "⚪",  # Todo
-    "triage": "❓",     # Triage
-    "backlog": "📥",    # Backlog
-}
-
-
 if not CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET is not set.")
 if not CHANNEL_ACCESS_TOKEN:
@@ -86,7 +68,7 @@ class LinePushService(BaseService):
                 lines.append("")
 
         if not has_any:
-            return "■ LINEAR DAILY FOCUS\n\n✨ Inbox zero.\n現在進行中のタスクはありません。"
+            return "📅 LINEAR DAILY FOCUS\n\n Progress\n ##########\n\n現在進行中のタスクはありません。"
 
         return "\n".join(lines).strip()
 

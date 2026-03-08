@@ -18,7 +18,7 @@ class LinearClient(BaseHTTPClient):
 	def _validate_env(self) -> None:
 		return super()._validate_env()
 	
-	def _call_api(self, query: str, variables: Dict[str, Any]) -> Dict[str, Any]:
+	def execute(self, query: str, variables: Dict[str, Any]) -> Dict[str, Any]:
 		headers = {
 			"Authorization": self.api_key,
 			"Content-Type": "application/json",
@@ -46,6 +46,8 @@ class LinearClient(BaseHTTPClient):
 		priority: int = 0,
 		notes: Optional[str] = None,
 		project_id: Optional[str] = None,
+		assignee_id: Optional[str] = None,
+		state_id: Optional[str] = None,
 	) -> str:
 		"""
 		Linear API を呼び出して新しい Issue を作成し、URLを返す。
@@ -65,14 +67,15 @@ class LinearClient(BaseHTTPClient):
 			"input": {
 				"teamId": self.team_id,
 				"title": title,
-				"assigneeId": self.user_id,
 				"priority": priority,
 				"description": notes or "",
 				"dueDate": due_date.isoformat() if due_date else None,
 				"projectId": project_id,
+				"assigneeId": assignee_id,
+				"stateId": state_id,
 			}
 		}
-		data = self._call_api(query, variables)
+		data = self.execute(query, variables)
 		issue_url = data["issueCreate"]["issue"]["url"]
 		return issue_url
 				
@@ -104,4 +107,4 @@ class LinearClient(BaseHTTPClient):
 			"userId": self.user_id,
 			"teamId": self.team_id
 		}
-		return self._call_api(query, variables)
+		return self.execute(query, variables)

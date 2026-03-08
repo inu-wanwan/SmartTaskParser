@@ -11,3 +11,5 @@ class Task(BaseModel):
     source: str = "line"
     user_id: Optional[str] = None
     page_url: Optional[str] = None
+    assignee_id: Optional[str] = None
+    state_id: Optional[str] = None

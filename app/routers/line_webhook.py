@@ -31,9 +31,10 @@ async def line_webhook(request: Request):
 
     # 2. 通常の Webhook 処理（署名検証付き）
     signature = request.headers.get("X-Line-Signature", "")
+    task_service = request.app.state.task_service
 
     try:
-        line_handlers.handle_line_webhook(body_str, signature)
+        line_handlers.handle_line_webhook(body_str, signature, task_service)
     except InvalidSignatureError:
         # 本番用：署名がおかしい場合は 400
         print("[WARN] Invalid LINE signature")

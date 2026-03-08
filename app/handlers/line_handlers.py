@@ -24,7 +24,7 @@ from typing import Any, Dict, List
 from linebot.exceptions import InvalidSignatureError
 
 
-def handle_line_webhook(body: str, signature: str) -> None:
+def handle_line_webhook(body: str, signature: str, task_service: task_service.TaskService) -> None:
     """
     LINE Platform からの Webhook を処理するメイン関数。
     - 署名検証
@@ -39,11 +39,11 @@ def handle_line_webhook(body: str, signature: str) -> None:
 
     for event in events:
         if isinstance(event, MessageEvent) and isinstance(event.message, TextMessage):
-            _handle_text_message(event)
+            _handle_text_message(event, task_service)
         # ここに postback イベントなども将来足せる
 
 
-def _handle_text_message(event: MessageEvent) -> None:
+def _handle_text_message(event: MessageEvent, task_service: task_service.TaskService) -> None:
     user_id = event.source.user_id
     text = event.message.text
 

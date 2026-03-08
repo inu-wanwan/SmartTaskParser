@@ -1,8 +1,20 @@
-from fastapi import APIRouter, Depends, Header, HTTPException
-from app.services.task_service import TaskService, get_task_service
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService, get_line_push_service
 
 router = APIRouter()
+
+def get_task_service(request: Request) -> TaskService:
+    """
+    FastAPI の Depends で TaskService を注入するための関数。
+    """
+    return request.app.state.task_service
+
+def get_line_push_service(request: Request) -> LinePushService:
+    """
+    FastAPI の Depends で LinePushService を注入するための関数。
+    """
+    return request.app.state.line_push_service
 
 @router.post("/daily/push")
 def daily_push(

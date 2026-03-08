@@ -10,20 +10,14 @@ from app.models.task import Task
 
 JST = ZoneInfo("Asia/Tokyo")
 
-LINEAR_PROJECT_MAP = {
-    "Research": "484c0d7b-f027-4a08-b433-6e9984b50436",
-    "Job": "760206e3-7e37-4e5e-b4ab-de7855cdd10f",
-    "Private": "4cd90f88-7522-4881-9030-f6933337488d",
-    "Classes": "a7b05be4-e43f-434e-8646-742c79c54b0b",
-    "Others": None,
-}
-
 class TaskService(BaseService):
-    def __init__(self) -> None:
+    def __init__(self, prompt_builder, linear_service) -> None:
         super().__init__()
         self.llm_client = LLMClient()
         self.notion_client = NotionClient()
         self.linear_client = LinearClient()
+        self.prompt_builder = prompt_builder
+        self.linear_service = linear_service
 
     def create_task_from_text(
         self,
@@ -34,13 +28,19 @@ class TaskService(BaseService):
         """
         自然文のテキストからタスクを生成し、Linear に登録したうえで Task を返す。
         """
-        parsed = self.llm_client.parse_task_text(text)
 
-        title = parsed.get("title") or text
-        due_date_str = parsed.get("dueDate")
-        priority = parsed.get("priority") or 0
-        description = parsed.get("description")
-        label = parsed.get("label")
+        project_context = self.linear_service.get_project_context()
+        prompt = self.prompt_builder.build(text, project_context=project_context)
+        parsed = self.llm_client.parse_task_text(prompt)
+        id_resolved = self.linear_service.resolve_ids(parsed)
+
+        title = id_resolved.get("title") or text
+        due_date_str = id_resolved.get("dueDate")
+        priority = id_resolved.get("priority") or 0
+        description = id_resolved.get("description")
+        project_id = id_resolved.get("projectId")
+        assignee_id = id_resolved.get("assigneeId")
+        state_id = id_resolved.get("stateId")
 
         due_date: Optional[date] = self._parse_date_str(due_date_str)
 
@@ -51,7 +51,9 @@ class TaskService(BaseService):
             description=description,
             source=source,
             user_id=user_id,
-            project_id=LINEAR_PROJECT_MAP.get(label),
+            project_id=project_id,
+            assignee_id=assignee_id,
+            state_id=state_id,
         )
 
         page_url = self.linear_client.create_linear_issue(
@@ -60,6 +62,8 @@ class TaskService(BaseService):
             priority=task.priority,
             notes=task.description,
             project_id=task.project_id,
+            assignee_id=task.assignee_id,
+            state_id=task.state_id,
         )
 
         task.page_url = page_url
@@ -195,40 +199,3 @@ class TaskService(BaseService):
             return datetime.fromisoformat(due_iso).astimezone(JST)
         except ValueError:
             return None
-
-
-task_service = TaskService()
-
-def get_task_service() -> TaskService:
-    return task_service
-
-
-def create_task_from_text(
-    text: str,
-    source: str = "line",
-    user_id: Optional[str] = None,
-) -> Task:
-    return task_service.create_task_from_text(text=text, source=source, user_id=user_id)
-
-
-def get_tasks_within_next_n_days(
-    n_days: int = 3,
-    limit: int = 50,
-    include_overdue: bool = True,
-) -> List[Dict[str, Any]]:
-    return task_service.get_tasks_within_next_n_days(
-        n_days=n_days,
-        limit=limit,
-        include_overdue=include_overdue,
-    )
-
-
-def get_daily_tasks_grouped_notion(
-    n_days: int = 3,
-    limit: int = 50,
-) -> Dict[str, List[Dict[str, Any]]]:
-    return task_service.get_daily_tasks_grouped_notion(n_days=n_days, limit=limit)
-
-
-def get_daily_tasks_grouped_linear() -> Dict[str, Any]:
-    return task_service.get_daily_tasks_grouped_linear()

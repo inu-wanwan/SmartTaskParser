@@ -1,9 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from app.models.request import ParseAndCreateRequest
 from app.models.task import Task as TaskModel
-from app.services.task_service import TaskService, get_task_service
+from app.services.task_service import TaskService
 
 router = APIRouter()
+
+def get_task_service(request: Request) -> TaskService:
+    """
+    FastAPI の Depends で TaskService を注入するための関数。
+    """
+    return request.app.state.task_service
 
 @router.post("/parse-and-create", response_model=TaskModel)
 def parse_and_create_task(
