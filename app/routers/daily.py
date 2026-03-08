@@ -16,31 +16,43 @@ def get_line_push_service(request: Request) -> LinePushService:
     """
     return request.app.state.line_push_service
 
+def get_user_repo(request: Request):
+    """
+    FastAPI の Depends で UserRepository を注入するための関数。
+    """
+    return request.app.state.user_repo
+
 @router.post("/daily/push")
 def daily_push(
     cron_token: str = Header(... , alias="X-Cron-Token"),
     task_service: TaskService = Depends(get_task_service),
     line_push_service: LinePushService = Depends(get_line_push_service),
+    user_repo = Depends(get_user_repo)
 ):
     """
     デイリータスクサマリーを LINE にプッシュ送信するエンドポイント。
     CRON ジョブからのリクエストに含まれるトークンを検証する。
     """
-    try:
-        line_push_service.verify_cron_token(cron_token)
-        grouped_tasks = task_service.get_daily_tasks_grouped_linear()
-        line_push_service.push_daily_summary(grouped_tasks)
-        return {
-            "ok": True,
-            "counts": {
-                "urgent_overdue": len(grouped_tasks.get("urgent_overdue", [])),
-                "in_progress": len(grouped_tasks.get("in_progress", [])),
-                "current_cycle_todo": len(grouped_tasks.get("current_cycle_todo", [])),
-                "triage": len(grouped_tasks.get("triage", [])),
-            }
-        }
-    except PermissionError as e:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    except Exception as e:
-        print(f"[ERROR] /daily/push failed: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+    line_push_service.verify_cron_token(cron_token)
+    users = user_repo.get_all_users()
+
+    results = []
+
+    for user_id, user_config in users.items():
+        if not user_config:
+            print(f"[WARN] No user config for user_id={user_id}, skipping daily push.")
+        
+        try:
+            grouped_tasks = task_service.get_daily_tasks_grouped_linear(user_config=user_config)
+            line_push_service.push_daily_summary(user_id=user_id, grouped=  grouped_tasks)
+            results.append({"user_id": user_id, "status": "success"})
+        except ValueError as e:
+            print(f"[ERROR] Configuration error for user_id={user_id}: {e}")
+            results.append({"user_id": user_id, "status": "config_error", "detail": str(e)})
+        except PermissionError as e:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        except Exception as e:
+            print(f"[ERROR] /daily/push failed: {e}")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+        
+    return {"results": results}

@@ -72,13 +72,10 @@ class LinePushService(BaseService):
 
         return "\n".join(lines).strip()
 
-    def push_daily_summary(self, grouped: Dict[str, List[Dict[str, Any]]]) -> None:
+    def push_daily_summary(self, user_id: str, grouped: Dict[str, List[Dict[str, Any]]]) -> None:
         """
         LINE ユーザーに日次タスクサマリーをプッシュ送信する。
         """
-        user_id = os.getenv("LINE_USER_ID")
-        if not user_id:
-            raise ValueError("LINE_USER_ID is not set.")
 
         message_text = self.build_daily_summary(grouped)
         self.line_bot_api.push_message(

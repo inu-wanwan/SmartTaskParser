@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uvicorn
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 # 各種クライアントとサービスのインポート
 from app.clients.llm_client import LLMClient
@@ -12,6 +14,15 @@ from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService
 from app.prompts.linear import LinearPromptBuilder
 from app.routers import line_webhook, tasks, daily
+from app.repositories.user_repository import UserRepository
+
+# Firebase Admin SDK の初期化
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase_key.json")
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
+print("[INFO] Firebase initialized successfully.")
 
 def create_app() -> FastAPI:
     app = FastAPI(title="SmartTaskParser API", version="0.1.0")
@@ -19,18 +30,17 @@ def create_app() -> FastAPI:
     # 1. 共通インスタンスの生成（起動時に1回だけ実行）
     # 現状の TaskService.__init__ の引数に合わせて組み立てる
     prompt_builder = LinearPromptBuilder()
-    linear_client = LinearClient()
-    linear_service = LinearService(client=linear_client)
+    user_repo = UserRepository()  # Firestore クライアントを持つリポジトリ
     
     # TaskService に必要な依存を注入してインスタンス化
     task_service = TaskService(
         prompt_builder=prompt_builder, 
-        linear_service=linear_service
     )
     
     line_push_service = LinePushService()
 
     # 2. アプリの状態 (state) にインスタンスを登録
+    app.state.user_repo = user_repo
     app.state.task_service = task_service
     app.state.line_push_service = line_push_service
 

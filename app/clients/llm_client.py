@@ -12,10 +12,12 @@ class LLMClient(BaseClient):
     タスク抽出のためのプロンプト構築や、API 呼び出し、レスポンスの後処理などを担当する。
     """
 
-    def __init__(self, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash"):
         super().__init__()
 
-        self.api_key = self.get_env_or_raise("LLM_API_KEY")
+        self.api_key = api_key or os.getenv("LLM_API_KEY")
+        if not self.api_key:
+            raise ValueError("LLM API key is not set.")
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel(model_name)
 

@@ -10,16 +10,17 @@ class NotionClient(BaseClient):
     SDK (notion-client) をラップして提供する。
     """
 
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None, database_id: Optional[str] = None):
         # BaseClient の初期化（.env の読み込みなど）
         super().__init__()
         
         # 環境変数の取得
-        self.api_key = self.get_env_or_raise("NOTION_API_KEY")
-        self.database_id = self.get_env_or_raise("NOTION_DATABASE_ID")
-        
+        self.api_key = api_key
+        self.database_id = database_id
+
         # Notion SDK の初期化
         self.client = Client(auth=self.api_key)
+        self._validate_env()
 
     def _validate_env(self) -> None:
         """

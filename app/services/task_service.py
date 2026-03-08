@@ -7,32 +7,37 @@ from app.clients.llm_client import LLMClient
 from app.clients.notion_client import NotionClient
 from app.clients.linear_client import LinearClient
 from app.models.task import Task
+from app.services.linear_service import LinearService
 
 JST = ZoneInfo("Asia/Tokyo")
 
 class TaskService(BaseService):
-    def __init__(self, prompt_builder, linear_service) -> None:
+    def __init__(self, prompt_builder) -> None:
         super().__init__()
-        self.llm_client = LLMClient()
-        self.notion_client = NotionClient()
-        self.linear_client = LinearClient()
         self.prompt_builder = prompt_builder
-        self.linear_service = linear_service
 
     def create_task_from_text(
         self,
         text: str,
+        user_config: Dict[str, Any],
         source: str = "line",
         user_id: Optional[str] = None,
     ) -> Task:
         """
-        自然文のテキストからタスクを生成し、Linear に登録したうえで Task を返す。
+        ユーザー固定の設定を使用してタスクを生成し、Linear に登録したうえで Task を返す。
         """
+        llm_client = LLMClient(api_key=user_config.get("llm_api_key"))
+        linear_client = LinearClient(
+            api_key=user_config.get("linear_api_key"),
+            team_id=user_config.get("linear_team_id"),
+            user_id=user_config.get("linear_user_id"),
+        )
+        linear_service = LinearService(client=linear_client)
 
-        project_context = self.linear_service.get_project_context()
+        project_context = linear_service.get_project_context()
         prompt = self.prompt_builder.build(text, project_context=project_context)
-        parsed = self.llm_client.parse_task_text(prompt)
-        id_resolved = self.linear_service.resolve_ids(parsed)
+        parsed = llm_client.parse_task_text(prompt)
+        id_resolved = linear_service.resolve_ids(parsed)
 
         title = id_resolved.get("title") or text
         due_date_str = id_resolved.get("dueDate")
@@ -56,7 +61,7 @@ class TaskService(BaseService):
             state_id=state_id,
         )
 
-        page_url = self.linear_client.create_linear_issue(
+        page_url = linear_client.create_linear_issue(
             title=task.title,
             due_date=task.due_date,
             priority=task.priority,
@@ -72,6 +77,7 @@ class TaskService(BaseService):
 
     def get_tasks_within_next_n_days(
         self,
+        user_config: Dict[str, Any],
         n_days: int = 3,
         limit: int = 50,
         include_overdue: bool = True,
@@ -79,12 +85,13 @@ class TaskService(BaseService):
         """
         今から n_days 日以内に期限が来るタスク一覧を取得する。
         """
+        notion_client = NotionClient(api_key=user_config.get("notion_api_key"), database_id=user_config.get("notion_database_id"))
         now = datetime.now(JST)
         today_start = datetime.combine(now.date(), time(0, 0, 0), tzinfo=JST)
         end_date = datetime.combine((now.date() + timedelta(days=n_days)), time(23, 59, 59), tzinfo=JST)
 
-        pages = self.notion_client.query_tasks_due_before(end_iso=end_date.isoformat(), limit=limit, exclude_done=True)
-        tasks = [self.notion_client.extract_task_summary(page) for page in pages]
+        pages = notion_client.query_tasks_due_before(end_iso=end_date.isoformat(), limit=limit, exclude_done=True)
+        tasks = [notion_client.extract_task_summary(page) for page in pages]
 
         filtered: List[Dict[str, Any]] = []
         for task in tasks:
@@ -99,19 +106,21 @@ class TaskService(BaseService):
 
     def get_daily_tasks_grouped_notion(
         self,
+        user_config: Dict[str, Any],
         n_days: int = 3,
         limit: int = 50,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         デイリー通知用に、Notionタスクを期限でグルーピングして取得する。
         """
+        notion_client = NotionClient(api_key=user_config.get("notion_api_key"), database_id=user_config.get("notion_database_id"))
         now = datetime.now(JST)
         today_start = datetime.combine(now.date(), time(0, 0, 0), tzinfo=JST)
         today_end = datetime.combine(now.date(), time(23, 59, 59), tzinfo=JST)
         end_date = datetime.combine((now.date() + timedelta(days=n_days)), time(23, 59, 59), tzinfo=JST)
 
-        pages = self.notion_client.query_task_candidates_for_dayly(end_iso=end_date.isoformat(), limit=limit)
-        tasks = [self.notion_client.extract_task_summary(page) for page in pages]
+        pages = notion_client.query_task_candidates_for_dayly(end_iso=end_date.isoformat(), limit=limit)
+        tasks = [notion_client.extract_task_summary(page) for page in pages]
 
         overdue: List[Dict[str, Any]] = []
         today: List[Dict[str, Any]] = []
@@ -137,11 +146,12 @@ class TaskService(BaseService):
             "upcoming": upcoming,
         }
 
-    def get_daily_tasks_grouped_linear(self) -> Dict[str, Any]:
+    def get_daily_tasks_grouped_linear(self, user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Linearの流儀に則り、優先度やステータス、サイクルに基づいてタスクを分類する。
         """
-        raw_data = self.linear_client.fetch_daily_summary()
+        linear_client = LinearClient(api_key=user_config.get("linear_api_key"), team_id=user_config.get("linear_team_id"), user_id=user_config.get("linear_user_id"))
+        raw_data = linear_client.fetch_daily_summary()
 
         assigned_issues = raw_data.get("user", {}).get("assignedIssues", {}).get("nodes", [])
         team_data = raw_data.get("team", {})

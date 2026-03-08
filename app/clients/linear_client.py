@@ -9,15 +9,20 @@ class LinearClient(BaseHTTPClient):
 	Linear API とやりとりするクライアントクラス。
 	タスクの作成や、日次サマリーのデータ取得などを行う。
 	"""
-	def __init__(self):
+	def __init__(self, api_key, team_id, user_id):
+		self.api_key = api_key
+		self.team_id = team_id
+		self.user_id = user_id
 		super().__init__(base_url="https://api.linear.app/graphql")
-		self.api_key = self.get_env_or_raise("LINEAR_API_KEY")
-		self.team_id = self.get_env_or_raise("LINEAR_TEAM_ID")
-		self.user_id = self.get_env_or_raise("LINEAR_USER_ID")
 
 	def _validate_env(self) -> None:
-		return super()._validate_env()
-	
+		if not self.api_key:
+			raise ValueError("Linear API key is not set.")
+		if not self.team_id:
+			raise ValueError("Linear team ID is not set.")
+		if not self.user_id:
+			raise ValueError("Linear user ID is not set.")
+		
 	def execute(self, query: str, variables: Dict[str, Any]) -> Dict[str, Any]:
 		headers = {
 			"Authorization": self.api_key,

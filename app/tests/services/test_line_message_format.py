@@ -30,6 +30,6 @@ def test_build_daily_summary_all_empty_inbox_zero_message():
     }
     msg = build_daily_summary(grouped)
 
-    assert "Inbox zero." in msg
+    assert "現在進行中のタスクはありません" in msg
     assert "LINEAR DAILY FOCUS" in msg
     assert "None" not in msg

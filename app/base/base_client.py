@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import os
-from dotenv import load_dotenv
 
 class BaseClient(ABC):
     """
@@ -10,7 +9,6 @@ class BaseClient(ABC):
 
     @abstractmethod
     def __init__(self):
-        load_dotenv()
         self._validate_env()
 
     @abstractmethod

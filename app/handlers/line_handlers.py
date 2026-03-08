@@ -5,7 +5,10 @@ from dotenv import load_dotenv
 from linebot import LineBotApi, WebhookParser
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, ButtonComponent, URIAction
 
+from typing import Any, Dict, List
+from linebot.exceptions import InvalidSignatureError
 from app.services import task_service
+from app.repositories.user_repository import UserRepository
 
 load_dotenv()
 
@@ -20,11 +23,8 @@ if not CHANNEL_ACCESS_TOKEN:
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
 
-from typing import Any, Dict, List
-from linebot.exceptions import InvalidSignatureError
 
-
-def handle_line_webhook(body: str, signature: str, task_service: task_service.TaskService) -> None:
+def handle_line_webhook(body: str, signature: str, task_service: task_service.TaskService, user_repo: UserRepository) -> None:
     """
     LINE Platform からの Webhook を処理するメイン関数。
     - 署名検証
@@ -39,17 +39,28 @@ def handle_line_webhook(body: str, signature: str, task_service: task_service.Ta
 
     for event in events:
         if isinstance(event, MessageEvent) and isinstance(event.message, TextMessage):
-            _handle_text_message(event, task_service)
+            _handle_text_message(event, task_service, user_repo)
         # ここに postback イベントなども将来足せる
 
 
-def _handle_text_message(event: MessageEvent, task_service: task_service.TaskService) -> None:
+def _handle_text_message(event: MessageEvent, task_service: task_service.TaskService, user_repo: UserRepository) -> None:
     user_id = event.source.user_id
     text = event.message.text
+
+    # Firestore からユーザー設定を取得
+    user_config = user_repo.get_user_config(user_id)
+    if not user_config:
+        # ユーザー設定がない場合は、初期設定を促すメッセージを送る
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="👋 こんにちは！タスク管理Botです。まずは初期設定を行いましょう。")
+        )
+        return
 
     # タスク登録実行
     task = task_service.create_task_from_text(
         text=text,
+        user_config=user_config,
         source="line",
         user_id=user_id,
     )
