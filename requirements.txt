@@ -7,3 +7,5 @@ notion-client
 line-bot-sdk
 pydantic
 pytest
+firebase-admin
+cryptography

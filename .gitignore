@@ -32,3 +32,6 @@ htmlcov/
 
 # Claude
 .claude/
+
+# Firebase key
+firebase_key.json
