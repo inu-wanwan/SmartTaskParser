@@ -35,3 +35,6 @@ htmlcov/
 
 # Firebase key
 firebase_key.json
+
+# DS_Store (macOS)
+.DS_Store
