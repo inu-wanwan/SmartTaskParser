@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService, get_line_push_service
+from app.services.user_service import UserService
 
 router = APIRouter()
 
@@ -22,19 +23,25 @@ def get_user_repo(request: Request):
     """
     return request.app.state.user_repo
 
+def get_user_service(request: Request):
+    """
+    FastAPI の Depends で UserService を注入するための関数。
+    """
+    return request.app.state.user_service
+
 @router.post("/daily/push")
 def daily_push(
     cron_token: str = Header(... , alias="X-Cron-Token"),
     task_service: TaskService = Depends(get_task_service),
     line_push_service: LinePushService = Depends(get_line_push_service),
-    user_repo = Depends(get_user_repo)
+    user_service: UserService = Depends(get_user_service)
 ):
     """
     デイリータスクサマリーを LINE にプッシュ送信するエンドポイント。
     CRON ジョブからのリクエストに含まれるトークンを検証する。
     """
     line_push_service.verify_cron_token(cron_token)
-    users = user_repo.get_all_users()
+    users = user_service.get_all_users()
 
     results = []
 

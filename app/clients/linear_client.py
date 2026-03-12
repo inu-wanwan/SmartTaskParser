@@ -9,7 +9,7 @@ class LinearClient(BaseHTTPClient):
 	Linear API とやりとりするクライアントクラス。
 	タスクの作成や、日次サマリーのデータ取得などを行う。
 	"""
-	def __init__(self, api_key, team_id, user_id):
+	def __init__(self, api_key, team_id: str = None, user_id: str = None) -> None:
 		self.api_key = api_key
 		self.team_id = team_id
 		self.user_id = user_id
@@ -18,10 +18,6 @@ class LinearClient(BaseHTTPClient):
 	def _validate_env(self) -> None:
 		if not self.api_key:
 			raise ValueError("Linear API key is not set.")
-		if not self.team_id:
-			raise ValueError("Linear team ID is not set.")
-		if not self.user_id:
-			raise ValueError("Linear user ID is not set.")
 		
 	def execute(self, query: str, variables: Dict[str, Any]) -> Dict[str, Any]:
 		headers = {
@@ -51,12 +47,14 @@ class LinearClient(BaseHTTPClient):
 		priority: int = 0,
 		notes: Optional[str] = None,
 		project_id: Optional[str] = None,
-		assignee_id: Optional[str] = None,
 		state_id: Optional[str] = None,
 	) -> str:
 		"""
 		Linear API を呼び出して新しい Issue を作成し、URLを返す。
 		"""
+		if not self.team_id or not self.user_id:
+			raise ValueError("Team ID and User ID must be set to create an issue.")
+
 		query = """
 		mutation CreateIssue($input: IssueCreateInput!) {
 		issueCreate(input: $input) {
@@ -76,7 +74,7 @@ class LinearClient(BaseHTTPClient):
 				"description": notes or "",
 				"dueDate": due_date.isoformat() if due_date else None,
 				"projectId": project_id,
-				"assigneeId": assignee_id,
+				"assigneeId": self.user_id,
 				"stateId": state_id,
 			}
 		}
@@ -113,3 +111,26 @@ class LinearClient(BaseHTTPClient):
 			"teamId": self.team_id
 		}
 		return self.execute(query, variables)
+	
+	def fetch_viewer_info(self) -> Dict[str, Any]:
+		"""
+		Viewer の情報を取得する。
+		"""
+		query = """
+		query {
+			viewer {
+				id
+			}
+			teams {
+				nodes {
+					id name
+				}
+			}
+		}
+		"""
+		response = self.execute(query, {})
+
+		return {
+			"user_id": response["viewer"]["id"],
+			"team_id": response["teams"]["nodes"][0]["id"] if response["teams"]["nodes"] else None,
+		}

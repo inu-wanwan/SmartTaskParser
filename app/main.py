@@ -13,8 +13,9 @@ from app.services.linear_service import LinearService
 from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService
 from app.prompts.linear import LinearPromptBuilder
-from app.routers import line_webhook, tasks, daily
+from app.routers import line_webhook, tasks, daily, users
 from app.repositories.user_repository import UserRepository
+from app.services.user_service import UserService
 
 # Firebase Admin SDK の初期化
 if not firebase_admin._apps:
@@ -36,11 +37,14 @@ def create_app() -> FastAPI:
     task_service = TaskService(
         prompt_builder=prompt_builder, 
     )
+
+    user_service = UserService(user_repository=user_repo)
     
     line_push_service = LinePushService()
 
     # 2. アプリの状態 (state) にインスタンスを登録
     app.state.user_repo = user_repo
+    app.state.user_service = user_service
     app.state.task_service = task_service
     app.state.line_push_service = line_push_service
 
@@ -57,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(line_webhook.router)
     app.include_router(tasks.router)
     app.include_router(daily.router)
+    app.include_router(users.router)
 
     @app.get("/health")
     def health_check():

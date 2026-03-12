@@ -7,7 +7,8 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage, FlexSendM
 
 from typing import Any, Dict, List
 from linebot.exceptions import InvalidSignatureError
-from app.services import task_service
+from app.services.task_service import TaskService
+from app.services.user_service import UserService
 from app.repositories.user_repository import UserRepository
 
 load_dotenv()
@@ -24,7 +25,7 @@ line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(CHANNEL_SECRET)
 
 
-def handle_line_webhook(body: str, signature: str, task_service: task_service.TaskService, user_repo: UserRepository) -> None:
+def handle_line_webhook(body: str, signature: str, task_service: TaskService, user_service: UserService) -> None:
     """
     LINE Platform からの Webhook を処理するメイン関数。
     - 署名検証
@@ -39,16 +40,16 @@ def handle_line_webhook(body: str, signature: str, task_service: task_service.Ta
 
     for event in events:
         if isinstance(event, MessageEvent) and isinstance(event.message, TextMessage):
-            _handle_text_message(event, task_service, user_repo)
+            _handle_text_message(event, task_service, user_service)
         # ここに postback イベントなども将来足せる
 
 
-def _handle_text_message(event: MessageEvent, task_service: task_service.TaskService, user_repo: UserRepository) -> None:
+def _handle_text_message(event: MessageEvent, task_service: TaskService, user_service: UserService) -> None:
     user_id = event.source.user_id
     text = event.message.text
 
     # Firestore からユーザー設定を取得
-    user_config = user_repo.get_user_config(user_id)
+    user_config = user_service.get_user_config_by_line_user_id(user_id)
     if not user_config:
         # ユーザー設定がない場合は、初期設定を促すメッセージを送る
         line_bot_api.reply_message(
