@@ -150,9 +150,10 @@ class UserService(BaseService):
         
         return self.get_user_config(user.id)
     
-    def get_all_users(self) -> Dict[str, User]:
+    def get_all_users(self) -> Dict[str, Any]:
         """
-        全ユーザーの情報を取得する。
+        全ユーザーの設定を取得する。
+        キーは line_user_id、値は復号済みの設定 dict。
+        UserRepository.get_all_users() が既に正しい形式で返すためそのまま委譲する。
         """
-        users = self.user_repository.get_all_users()
-        return {user.id: self.get_user_config(user.id) for user in users}
+        return self.user_repository.get_all_users()

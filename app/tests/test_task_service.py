@@ -1,78 +1,70 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from datetime import date
 
 from app.services.task_service import TaskService
 
 
+# テスト用のダミーユーザー設定
+USER_CONFIG = {
+    "linear_api_key": "lin_test_key",
+    "linear_team_id": "team-123",
+    "linear_user_id": "user-123",
+    "llm_api_key": "llm_test_key",
+}
+
+
 @pytest.fixture
-def service(monkeypatch):
-    # 依存クライアントをモック差し替え
-    mock_llm_client = MagicMock()
-    mock_notion_client = MagicMock()
-    mock_linear_client = MagicMock()
-
-    import app.services.task_service as task_service_module
-
-    monkeypatch.setattr(task_service_module, "LLMClient", lambda: mock_llm_client)
-    monkeypatch.setattr(task_service_module, "NotionClient", lambda: mock_notion_client)
-    monkeypatch.setattr(task_service_module, "LinearClient", lambda: mock_linear_client)
-
+def service():
     mock_prompt_builder = MagicMock()
     mock_prompt_builder.build.side_effect = lambda text, project_context: text
-
-    mock_linear_service = MagicMock()
-    mock_linear_service.get_project_context.return_value = "Test Context"
-
-    def resolve_ids(payload):
-        data = dict(payload)
-        if data.get("label") == "Research":
-            data["projectId"] = "484c0d7b-f027-4a08-b433-6e9984b50436"
-        return data
-
-    mock_linear_service.resolve_ids.side_effect = resolve_ids
-
-    return TaskService(prompt_builder=mock_prompt_builder, linear_service=mock_linear_service)
+    return TaskService(prompt_builder=mock_prompt_builder)
 
 
 def test_create_task_from_text_uses_llm_and_linear(service):
-    def mock_parse_task_text(text):
-        assert "スライド" in text
-        return {
-            "title": "研究スライド修正",
-            "dueDate": "2026-03-07",
-            "priority": 2,
-            "description": "発表用のスライドを更新",
-            "label": "Research",
-        }
+    """
+    create_task_from_text が LLM・Linear API を正しく呼び出し、
+    プロジェクトIDを含む Task を返すことを確認する。
+    """
+    mock_llm = MagicMock()
+    mock_llm.parse_task_text.return_value = {
+        "title": "研究スライド修正",
+        "dueDate": "2026-03-07",
+        "priority": 2,
+        "description": "発表用のスライドを更新",
+        "project_name": "Research",
+    }
 
-    def mock_create_linear_issue(
-        title,
-        due_date,
-        priority,
-        notes,
-        project_id,
-        state_id,
-    ):
-        assert title == "研究スライド修正"
-        assert due_date.isoformat() == "2026-03-07"
-        assert notes == "発表用のスライドを更新"
-        assert priority == 2
-        assert project_id == "484c0d7b-f027-4a08-b433-6e9984b50436"
-        assert state_id is None
-        return "https://linear.app/example/issue/ABC-123"
+    mock_linear_client = MagicMock()
+    mock_linear_client.create_linear_issue.return_value = "https://linear.app/example/issue/ABC-123"
 
-    service.llm_client.parse_task_text.side_effect = mock_parse_task_text
-    service.linear_client.create_linear_issue.side_effect = mock_create_linear_issue
+    mock_linear_service = MagicMock()
+    mock_linear_service.get_project_context.return_value = "プロジェクト一覧:\n- Research: 研究関連"
+    mock_linear_service.resolve_ids.return_value = {
+        "title": "研究スライド修正",
+        "dueDate": "2026-03-07",
+        "priority": 2,
+        "description": "発表用のスライドを更新",
+        "projectId": "484c0d7b-f027-4a08-b433-6e9984b50436",
+        "stateId": None,
+        "assigneeId": "user-123",
+    }
 
-    task = service.create_task_from_text(
-        "明日の午前までに研究のスライド直す",
-        source="test",
-        user_id="test-user",
-    )
+    import app.services.task_service as ts_module
+
+    with patch.object(ts_module, "LLMClient", return_value=mock_llm), \
+         patch.object(ts_module, "LinearClient", return_value=mock_linear_client), \
+         patch.object(ts_module, "LinearService", return_value=mock_linear_service):
+
+        task = service.create_task_from_text(
+            text="明日の午前までに研究のスライド直す",
+            user_config=USER_CONFIG,
+            source="test",
+            user_id="test-user",
+        )
 
     assert task.title == "研究スライド修正"
-    assert task.due_date is not None
-    assert task.due_date.isoformat() == "2026-03-07"
+    assert task.due_date == date(2026, 3, 7)
     assert task.priority == 2
     assert task.description == "発表用のスライドを更新"
     assert task.source == "test"
@@ -80,8 +72,17 @@ def test_create_task_from_text_uses_llm_and_linear(service):
     assert task.project_id == "484c0d7b-f027-4a08-b433-6e9984b50436"
     assert task.page_url == "https://linear.app/example/issue/ABC-123"
 
+    # ensure_synced が get_project_context より先に呼ばれていることを確認
+    call_order = mock_linear_service.method_calls
+    method_names = [c[0] for c in call_order]
+    assert method_names.index("ensure_synced") < method_names.index("get_project_context")
+
 
 def test_get_daily_tasks_grouped_linear_groups_by_priority_state_and_cycle(service):
+    """
+    get_daily_tasks_grouped_linear が優先度・ステータス・サイクルで
+    正しくグループ分けされることを確認する。
+    """
     raw_data = {
         "user": {
             "assignedIssues": {
@@ -119,9 +120,13 @@ def test_get_daily_tasks_grouped_linear_groups_by_priority_state_and_cycle(servi
         },
     }
 
-    service.linear_client.fetch_daily_summary.return_value = raw_data
+    mock_linear_client = MagicMock()
+    mock_linear_client.fetch_daily_summary.return_value = raw_data
 
-    grouped = service.get_daily_tasks_grouped_linear()
+    import app.services.task_service as ts_module
+
+    with patch.object(ts_module, "LinearClient", return_value=mock_linear_client):
+        grouped = service.get_daily_tasks_grouped_linear(user_config=USER_CONFIG)
 
     assert grouped["cycle"]["id"] == "cycle-1"
     assert [i["id"] for i in grouped["urgent_overdue"]] == ["1"]

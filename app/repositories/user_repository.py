@@ -8,7 +8,7 @@ from app.utils.cipher import encrypt_key, decrypt_key
 from app.models.user import User
 
 class UserRepository:
-    def __init__(self, key_path: str = "firebase-key.json"):
+    def __init__(self, key_path: str = "firebase_key.json"):
         """
         Firestore クライアントを初期化します。
         """

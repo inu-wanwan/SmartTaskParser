@@ -147,5 +147,5 @@ def build_daily_summary(data: Dict[str, Any]) -> str:
     return line_push_service.build_daily_summary(data)
 
 
-def push_daily_summary(grouped: Dict[str, List[Dict[str, Any]]]) -> None:
-    line_push_service.push_daily_summary(grouped)
+def push_daily_summary(user_id: str, grouped: Dict[str, List[Dict[str, Any]]]) -> None:
+    line_push_service.push_daily_summary(user_id=user_id, grouped=grouped)

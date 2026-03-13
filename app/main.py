@@ -3,13 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uvicorn
-import firebase_admin
-from firebase_admin import credentials, firestore
 
 # 各種クライアントとサービスのインポート
-from app.clients.llm_client import LLMClient
-from app.clients.linear_client import LinearClient
-from app.services.linear_service import LinearService
 from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService
 from app.prompts.linear import LinearPromptBuilder
@@ -17,13 +12,8 @@ from app.routers import line_webhook, tasks, daily, users
 from app.repositories.user_repository import UserRepository
 from app.services.user_service import UserService
 
-# Firebase Admin SDK の初期化
-if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_key.json")
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
-print("[INFO] Firebase initialized successfully.")
+# Firebase の初期化は UserRepository が担当する。
+# ローカルは firebase_key.json、Cloud Run は ADC（Application Default Credentials）を使用。
 
 def create_app() -> FastAPI:
     app = FastAPI(title="SmartTaskParser API", version="0.1.0")
