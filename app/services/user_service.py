@@ -4,7 +4,6 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.clients.linear_client import LinearClient
 from app.utils.cipher import encrypt_key, decrypt_key
-from uuid import uuid4
 
 class UserService(BaseService):
     def __init__(self, user_repository: UserRepository) -> None:
@@ -17,16 +16,10 @@ class UserService(BaseService):
         - 既存ユーザーがあればそれを返す
         - なければ新規作成して返す
         """
-        existing_user = self.user_repository.get_user_by_line_user_id(line_user_id)
-        if existing_user:
-            return existing_user
-        
-        new_user = User(
-            id=str(uuid4()),
-            line_user_id=line_user_id,
-        )
-        self.user_repository.create_user_doc(new_user)
-        return new_user
+        print(f"[INFO] [UserService] register_user: line_user_id={line_user_id}")
+        user = self.user_repository.get_or_create_user(line_user_id)
+        print(f"[INFO] [UserService] register_user done: internal_user_id={user.id}")
+        return user
     
     def get_user_by_line_user_id(self, line_user_id: str) -> Optional[User]:
         """
@@ -41,6 +34,19 @@ class UserService(BaseService):
         """
         user = self.get_user_by_line_user_id(line_user_id)
         return user.id if user else None
+
+    @staticmethod
+    def has_task_integration(user_config: Dict[str, Any]) -> bool:
+        """
+        LINE からタスク作成するために必要な設定が揃っているかを判定する。
+        """
+        required_keys = (
+            "linear_api_key",
+            "linear_team_id",
+            "linear_user_id",
+            "llm_api_key",
+        )
+        return all(user_config.get(key) for key in required_keys)
     
     def setup_linear_integration(
         self,
@@ -116,17 +122,21 @@ class UserService(BaseService):
     def get_user_config(self, user_id: str) -> Dict[str, Any]:
         """
         ユーザーの統合設定を取得する。
+        UserRepository.get_user_by_id はすでに復号済みの User を返すため、
+        ここでは追加の復号処理は不要。
         """
         user = self.user_repository.get_user_by_id(user_id)
         if not user:
+            print(f"[ERROR] [UserService] User not found: user_id={user_id}")
             raise ValueError("User not found")
-        
+
+        print(f"[INFO] [UserService] get_user_config: user_id={user_id}")
         return {
-            "linear_api_key": self._get_decrypted_linear_api_key(user_id),
+            "linear_api_key": user.linear_api_key,
             "linear_team_id": user.linear_team_id,
             "linear_user_id": user.linear_user_id,
-            "llm_api_key": self._get_decrypted_llm_api_key(user_id),
-            "notion_api_key": self._get_decrypted_notion_api_key(user_id),
+            "llm_api_key": user.llm_api_key,
+            "notion_api_key": user.notion_api_key,
             "notion_database_id": user.notion_database_id,
         }
     
@@ -145,4 +155,4 @@ class UserService(BaseService):
         全ユーザーの情報を取得する。
         """
         users = self.user_repository.get_all_users()
-        return {user.id: user for user in users}
+        return {user.id: self.get_user_config(user.id) for user in users}

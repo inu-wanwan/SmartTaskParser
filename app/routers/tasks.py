@@ -17,17 +17,23 @@ def get_user_repo(request: Request):
     """
     return request.app.state.user_repo
 
+def get_user_service(request: Request):
+    """
+    FastAPI の Depends で UserService を注入するための関数。
+    """
+    return request.app.state.user_service
+
 @router.post("/parse-and-create", response_model=TaskModel)
 def parse_and_create_task(
     req: ParseAndCreateRequest,
     service: TaskService = Depends(get_task_service),
-    user_repo = Depends(get_user_repo)
+    user_service = Depends(get_user_service)
 ):
     """
     自然文テキストを解析し、タスクを作成して返すエンドポイント。
     """
     try:
-        user_config = user_repo.get_user_config(req.user_id)
+        user_config = user_service.get_user_config_by_line_user_id(req.user_id)
         if not user_config:
             raise HTTPException(status_code=400, detail="User config not found")
         

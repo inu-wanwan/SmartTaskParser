@@ -67,7 +67,6 @@ class TaskService(BaseService):
             priority=task.priority,
             notes=task.description,
             project_id=task.project_id,
-            assignee_id=task.assignee_id,
             state_id=task.state_id,
         )
 

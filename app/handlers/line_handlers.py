@@ -45,26 +45,48 @@ def handle_line_webhook(body: str, signature: str, task_service: TaskService, us
 
 
 def _handle_text_message(event: MessageEvent, task_service: TaskService, user_service: UserService) -> None:
-    user_id = event.source.user_id
+    line_user_id = event.source.user_id
     text = event.message.text
 
-    # Firestore からユーザー設定を取得
-    user_config = user_service.get_user_config_by_line_user_id(user_id)
-    if not user_config:
-        # ユーザー設定がない場合は、初期設定を促すメッセージを送る
+    print(f"[INFO] LINE message received: line_user_id={line_user_id}, text={text!r}")
+
+    try:
+        user = user_service.register_user(line_user_id)
+        print(f"[INFO] User resolved: internal_user_id={user.id}")
+    except Exception as e:
+        print(f"[ERROR] register_user failed: line_user_id={line_user_id}, error={e}")
+        raise
+
+    try:
+        user_config = user_service.get_user_config(user.id)
+        print(f"[INFO] user_config loaded: linear_team_id={user_config.get('linear_team_id')}, has_llm_key={bool(user_config.get('llm_api_key'))}, has_linear_key={bool(user_config.get('linear_api_key'))}")
+    except Exception as e:
+        print(f"[ERROR] get_user_config failed: user_id={user.id}, error={e}")
+        raise
+
+    if not user_service.has_task_integration(user_config):
+        print(f"[INFO] Task integration not configured for user_id={user.id}. Sending setup prompt.")
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="👋 こんにちは！タスク管理Botです。まずは初期設定を行いましょう。")
+            TextSendMessage(
+                text="こんにちは。利用を開始するには Linear と LLM の初期設定が必要です。設定完了後にもう一度メッセージを送ってください。"
+            )
         )
         return
 
     # タスク登録実行
-    task = task_service.create_task_from_text(
-        text=text,
-        user_config=user_config,
-        source="line",
-        user_id=user_id,
-    )
+    try:
+        print(f"[INFO] Creating task from text: user_id={user.id}")
+        task = task_service.create_task_from_text(
+            text=text,
+            user_config=user_config,
+            source="line",
+            user_id=user.id,
+        )
+        print(f"[INFO] Task created: title={task.title!r}, page_url={task.page_url}")
+    except Exception as e:
+        print(f"[ERROR] create_task_from_text failed: user_id={user.id}, error={e}")
+        raise
 
     # テキストメッセージを組み立て
     reply_lines = [
@@ -77,14 +99,18 @@ def _handle_text_message(event: MessageEvent, task_service: TaskService, user_se
     if task.page_url:
         reply_lines.append(f"🔗 {task.page_url}")
     else:
-        # URLがない場合のデバッグ用（本番では消してもOK）
         reply_lines.append("⚠️ URLの取得に失敗しました")
 
     # リストを改行で結合
     reply_text = "\n".join(reply_lines)
 
     # 返信を送信
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text.strip())
-    )
+    try:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_text.strip())
+        )
+        print(f"[INFO] Reply sent successfully: user_id={user.id}")
+    except Exception as e:
+        print(f"[ERROR] reply_message failed: user_id={user.id}, error={e}")
+        raise

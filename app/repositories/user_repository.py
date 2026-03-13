@@ -3,6 +3,7 @@ from firebase_admin import credentials, firestore
 from typing import Optional, Dict, Any
 import os
 from uuid import uuid4
+from cryptography.fernet import InvalidToken
 from app.utils.cipher import encrypt_key, decrypt_key
 from app.models.user import User
 
@@ -141,14 +142,28 @@ class UserRepository:
             return doc
         return None
 
+    def _safe_decrypt(self, field_name: str, value: str) -> Optional[str]:
+        """
+        復号化を試みる。失敗した場合はログを出力して None を返す。
+        InvalidToken は __str__() が空文字なので例外の型も明示的にログ出力する。
+        """
+        try:
+            return decrypt_key(value)
+        except InvalidToken:
+            print(f"[ERROR] [UserRepository] Failed to decrypt '{field_name}': InvalidToken (key format invalid or MASTER_KEY mismatch)")
+            return None
+        except Exception as e:
+            print(f"[ERROR] [UserRepository] Failed to decrypt '{field_name}': {type(e).__name__}: {e}")
+            return None
+
     def _decrypt_user_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         decrypted = dict(config)
         if "notion_api_key" in decrypted:
-            decrypted["notion_api_key"] = decrypt_key(decrypted["notion_api_key"])
+            decrypted["notion_api_key"] = self._safe_decrypt("notion_api_key", decrypted["notion_api_key"])
         if "llm_api_key" in decrypted:
-            decrypted["llm_api_key"] = decrypt_key(decrypted["llm_api_key"])
+            decrypted["llm_api_key"] = self._safe_decrypt("llm_api_key", decrypted["llm_api_key"])
         if "linear_api_key" in decrypted:
-            decrypted["linear_api_key"] = decrypt_key(decrypted["linear_api_key"])
+            decrypted["linear_api_key"] = self._safe_decrypt("linear_api_key", decrypted["linear_api_key"])
         return decrypted
 
     def _to_user_model(self, user_id: str, config: Dict[str, Any], decrypt: bool = True) -> User:

@@ -51,7 +51,6 @@ def test_create_task_from_text_uses_llm_and_linear(service):
         priority,
         notes,
         project_id,
-        assignee_id,
         state_id,
     ):
         assert title == "研究スライド修正"
@@ -59,7 +58,6 @@ def test_create_task_from_text_uses_llm_and_linear(service):
         assert notes == "発表用のスライドを更新"
         assert priority == 2
         assert project_id == "484c0d7b-f027-4a08-b433-6e9984b50436"
-        assert assignee_id is None
         assert state_id is None
         return "https://linear.app/example/issue/ABC-123"
 
