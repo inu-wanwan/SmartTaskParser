@@ -34,10 +34,17 @@ class TaskService(BaseService):
         )
         linear_service = LinearService(client=linear_client)
 
+        # プロジェクト一覧を取得する前に必ず同期する（未同期だと空リストになる）
+        linear_service.ensure_synced()
         project_context = linear_service.get_project_context()
+        print(f"[INFO] [TaskService] project_context:\n{project_context}")
+
         prompt = self.prompt_builder.build(text, project_context=project_context)
         parsed = llm_client.parse_task_text(prompt)
+        print(f"[INFO] [TaskService] LLM parsed result: {parsed}")
+
         id_resolved = linear_service.resolve_ids(parsed)
+        print(f"[INFO] [TaskService] id_resolved: projectId={id_resolved.get('projectId')}, stateId={id_resolved.get('stateId')}")
 
         title = id_resolved.get("title") or text
         due_date_str = id_resolved.get("dueDate")

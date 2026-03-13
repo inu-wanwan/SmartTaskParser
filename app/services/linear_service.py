@@ -89,12 +89,17 @@ class LinearService(BaseService):
         else:
             result["stateId"] = self.state_mapping.get("todo")
 
-        # プロジェクト名の解釈
-        project_name = llm_result.get("project")
+        # プロジェクト名の解釈（LLMは "project_name" キーで返す）
+        project_name = llm_result.get("project_name")
+        print(f"[INFO] [LinearService] project_name from LLM: {project_name!r}")
+        print(f"[INFO] [LinearService] available projects: {list(self.project_mapping.keys())}")
         if project_name and project_name in self.project_mapping:
             result["projectId"] = self.project_mapping[project_name]["id"]
+            print(f"[INFO] [LinearService] projectId resolved: {result['projectId']}")
         else:
             result["projectId"] = None
+            if project_name:
+                print(f"[WARN] [LinearService] project_name '{project_name}' not found in mapping")
 
         # アサイン先は常に自分
         result["assigneeId"] = self.user_id
