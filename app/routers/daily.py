@@ -45,17 +45,19 @@ def daily_push(
 
     results = []
 
-    for user_id, user_config in users.items():
+    for line_user_id, user_config in users.items():
         if not user_config:
-            print(f"[WARN] No user config for user_id={user_id}, skipping daily push.")
+            print(f"[WARN] No user config for line_user_id={line_user_id}, skipping daily push.")
+            results.append({"user_id": line_user_id, "status": "skipped"})
+            continue
         
         try:
             grouped_tasks = task_service.get_daily_tasks_grouped_linear(user_config=user_config)
-            line_push_service.push_daily_summary(user_id=user_id, grouped=  grouped_tasks)
-            results.append({"user_id": user_id, "status": "success"})
+            line_push_service.push_daily_summary(user_id=line_user_id, grouped=grouped_tasks)
+            results.append({"user_id": line_user_id, "status": "success"})
         except ValueError as e:
-            print(f"[ERROR] Configuration error for user_id={user_id}: {e}")
-            results.append({"user_id": user_id, "status": "config_error", "detail": str(e)})
+            print(f"[ERROR] Configuration error for line_user_id={line_user_id}: {e}")
+            results.append({"user_id": line_user_id, "status": "config_error", "detail": str(e)})
         except PermissionError as e:
             raise HTTPException(status_code=401, detail="Unauthorized")
         except Exception as e:

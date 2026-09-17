@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 
 from app.base.base_service import BaseService
+from app.utils.line import is_valid_line_user_id
 
 load_dotenv()
 
@@ -76,6 +77,8 @@ class LinePushService(BaseService):
         """
         LINE ユーザーに日次タスクサマリーをプッシュ送信する。
         """
+        if not is_valid_line_user_id(user_id):
+            raise ValueError("Invalid LINE user ID; daily push was skipped.")
 
         message_text = self.build_daily_summary(grouped)
         self.line_bot_api.push_message(

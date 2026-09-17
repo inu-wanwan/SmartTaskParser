@@ -44,7 +44,7 @@ def test_get_all_users_only_decrypts_requested_secrets():
     doc = MagicMock()
     doc.id = "internal-user-id"
     doc.to_dict.return_value = {
-        "line_user_id": "U123",
+        "line_user_id": "U" + "1" * 32,
         "linear_api_key": "encrypted-linear-key",
         "llm_api_key": "encrypted-llm-key",
         "notion_api_key": "invalid-notion-key",
@@ -56,9 +56,23 @@ def test_get_all_users_only_decrypts_requested_secrets():
 
     decrypt.assert_called_once_with("linear_api_key", "encrypted-linear-key")
     assert users == {
-        "U123": {
+        "U" + "1" * 32: {
             "id": "internal-user-id",
-            "line_user_id": "U123",
+            "line_user_id": "U" + "1" * 32,
             "linear_api_key": "linear-key",
         }
     }
+
+
+def test_get_all_users_skips_uuid_document_without_line_user_id():
+    repository, collection = _repository_with_mock_db()
+    doc = MagicMock()
+    doc.id = "32e94fa9-7ef5-4514-906d-a3103b365094"
+    doc.to_dict.return_value = {"linear_api_key": "encrypted-linear-key"}
+    collection.stream.return_value = iter([doc])
+
+    with patch.object(repository, "_ensure_user_doc_ref") as migrate:
+        users = repository.get_all_users(decrypt_fields={"linear_api_key"})
+
+    assert users == {}
+    migrate.assert_not_called()

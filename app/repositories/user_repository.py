@@ -6,6 +6,7 @@ import os
 from uuid import uuid4
 from cryptography.fernet import InvalidToken
 from app.utils.cipher import encrypt_key, decrypt_key
+from app.utils.line import is_valid_line_user_id
 from app.models.user import User
 
 class UserRepository:
@@ -337,11 +338,23 @@ class UserRepository:
 
                 # 旧スキーマ(doc_id が line_user_id)も継続サポート
                 if not line_user_id:
+                    if not is_valid_line_user_id(doc.id):
+                        print(
+                            "[WARN] [UserRepository] Skipping user document without "
+                            f"a valid line_user_id: document_id={doc.id}"
+                        )
+                        continue
+
                     line_user_id = doc.id
-                    self._ensure_user_doc_ref(line_user_id)
-                    migrated = self.get_user_by_line_user_id(line_user_id)
-                    if migrated:
-                        users[line_user_id] = migrated.model_dump(exclude_none=True)
+                    migrated_ref = self._ensure_user_doc_ref(line_user_id)
+                    doc = migrated_ref.get()
+                    config = doc.to_dict() or {}
+
+                if not is_valid_line_user_id(line_user_id):
+                    print(
+                        "[WARN] [UserRepository] Skipping user document with "
+                        f"an invalid line_user_id: document_id={doc.id}"
+                    )
                     continue
 
                 user = self._to_user_model(
