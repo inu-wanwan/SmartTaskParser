@@ -3,6 +3,7 @@ from datetime import date
 from typing import Any, Dict, Optional, List
 import requests
 from app.base.base_client import BaseHTTPClient
+from app.models import response
 
 class LinearClient(BaseHTTPClient):
 	"""
@@ -89,7 +90,7 @@ class LinearClient(BaseHTTPClient):
 		query = """
 		query GetDailySummary($userId: String!, $teamId: String!) {
 		  user(id: $userId) {
-			assignedIssues(filter: { state: { type: { neq: "completed" } } }) {
+			assignedIssues(filter: { state: { type: { nin: ["completed", "canceled"] } } }) {
 			  nodes {
 				id identifier title priority dueDate
 				state { type name }
