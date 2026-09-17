@@ -1,5 +1,6 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from typing import Optional, Dict, Any
 import os
 from uuid import uuid4
@@ -32,7 +33,7 @@ class UserRepository:
         """
         docs = (
             self.db.collection(self.collection_name)
-            .where("line_user_id", "==", line_user_id)
+            .where(filter=FieldFilter("line_user_id", "==", line_user_id))
             .limit(1)
             .stream()
         )
@@ -87,7 +88,7 @@ class UserRepository:
         """
         docs = (
             self.db.collection(self.collection_name)
-            .where("line_user_id", "==", line_user_id)
+            .where(filter=FieldFilter("line_user_id", "==", line_user_id))
             .limit(1)
             .stream()
         )
