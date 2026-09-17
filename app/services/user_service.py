@@ -152,8 +152,7 @@ class UserService(BaseService):
     
     def get_all_users(self) -> Dict[str, Any]:
         """
-        全ユーザーの設定を取得する。
-        キーは line_user_id、値は復号済みの設定 dict。
-        UserRepository.get_all_users() が既に正しい形式で返すためそのまま委譲する。
+        日次通知に必要な全ユーザーの Linear 設定を取得する。
+        Notion/LLM のキーはこの処理で使用しないため、復号も返却もしない。
         """
-        return self.user_repository.get_all_users()
+        return self.user_repository.get_all_users(decrypt_fields={"linear_api_key"})

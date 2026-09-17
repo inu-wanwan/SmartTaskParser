@@ -1,7 +1,7 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Collection
 import os
 from uuid import uuid4
 from cryptography.fernet import InvalidToken
@@ -9,6 +9,12 @@ from app.utils.cipher import encrypt_key, decrypt_key
 from app.models.user import User
 
 class UserRepository:
+    ENCRYPTED_FIELDS = frozenset({
+        "notion_api_key",
+        "llm_api_key",
+        "linear_api_key",
+    })
+
     def __init__(self, key_path: str = "firebase_key.json"):
         """
         Firestore クライアントを初期化します。
@@ -157,18 +163,43 @@ class UserRepository:
             print(f"[ERROR] [UserRepository] Failed to decrypt '{field_name}': {type(e).__name__}: {e}")
             return None
 
-    def _decrypt_user_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    def _decrypt_user_config(
+        self,
+        config: Dict[str, Any],
+        decrypt_fields: Optional[Collection[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        指定された暗号化フィールドだけを復号する。
+
+        ``decrypt_fields`` を省略した通常のユーザー取得では全フィールドを復号し、
+        用途を限定した一括取得では不要な秘密情報を返却値から除外する。
+        """
         decrypted = dict(config)
-        if "notion_api_key" in decrypted:
-            decrypted["notion_api_key"] = self._safe_decrypt("notion_api_key", decrypted["notion_api_key"])
-        if "llm_api_key" in decrypted:
-            decrypted["llm_api_key"] = self._safe_decrypt("llm_api_key", decrypted["llm_api_key"])
-        if "linear_api_key" in decrypted:
-            decrypted["linear_api_key"] = self._safe_decrypt("linear_api_key", decrypted["linear_api_key"])
+        requested_fields = self.ENCRYPTED_FIELDS if decrypt_fields is None else set(decrypt_fields)
+
+        for field_name in self.ENCRYPTED_FIELDS:
+            if field_name not in requested_fields:
+                decrypted.pop(field_name, None)
+                continue
+
+            encrypted_value = decrypted.get(field_name)
+            if encrypted_value:
+                decrypted[field_name] = self._safe_decrypt(field_name, encrypted_value)
+
         return decrypted
 
-    def _to_user_model(self, user_id: str, config: Dict[str, Any], decrypt: bool = True) -> User:
-        parsed = self._decrypt_user_config(config) if decrypt else dict(config)
+    def _to_user_model(
+        self,
+        user_id: str,
+        config: Dict[str, Any],
+        decrypt: bool = True,
+        decrypt_fields: Optional[Collection[str]] = None,
+    ) -> User:
+        parsed = (
+            self._decrypt_user_config(config, decrypt_fields=decrypt_fields)
+            if decrypt
+            else dict(config)
+        )
         parsed["id"] = user_id
         return User(**parsed)
 
@@ -289,7 +320,10 @@ class UserRepository:
             return decrypt_key(encrypted_key)
         return None
 
-    def get_all_users(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_users(
+        self,
+        decrypt_fields: Optional[Collection[str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
         """
         全ユーザーの設定を取得します。日次サマリー送信時などに使用します。
         返却キーは line_user_id。
@@ -310,7 +344,12 @@ class UserRepository:
                         users[line_user_id] = migrated.model_dump(exclude_none=True)
                     continue
 
-                user = self._to_user_model(user_id=doc.id, config=config, decrypt=True)
+                user = self._to_user_model(
+                    user_id=doc.id,
+                    config=config,
+                    decrypt=True,
+                    decrypt_fields=decrypt_fields,
+                )
                 users[line_user_id] = user.model_dump(exclude_none=True)
             return users
         except Exception as e:
