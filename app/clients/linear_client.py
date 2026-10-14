@@ -90,7 +90,7 @@ class LinearClient(BaseHTTPClient):
 		query = """
 		query GetDailySummary($userId: String!, $teamId: String!) {
 		  user(id: $userId) {
-			assignedIssues(filter: { state: { type: { nin: ["completed", "canceled"] } } }) {
+			assignedIssues(filter: { state: { type: { nin: ["completed", "canceled", "backlog"] } } }) {
 			  nodes {
 				id identifier title priority dueDate
 				state { type name }
