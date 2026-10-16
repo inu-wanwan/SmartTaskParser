@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from app.base.base_service import BaseService
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
@@ -70,6 +70,46 @@ class UserService(BaseService):
         }
         self.user_repository.update_user_doc(user_id, update_data)
 
+    def setup_linear_view(self, user_id: str, view_ref: str) -> Dict[str, Any]:
+        """
+        日報の対象とする Linear ビューを、ビューの URL・slugId・ID から解決して保存する。
+        保存するのは正規の ID のみ。
+        """
+        user = self.user_repository.get_user_by_id(user_id)
+        if not user or not user.linear_api_key:
+            raise ValueError("Linear integration is not set up.")
+
+        linear_client = LinearClient(api_key=user.linear_api_key)
+        view = None
+        for candidate in self._view_id_candidates(view_ref):
+            try:
+                view = linear_client.fetch_custom_view(candidate)
+                break
+            except Exception as e:
+                print(f"[INFO] [UserService] Linear view lookup failed for {candidate!r}: {e}")
+        if not view:
+            raise ValueError("Linear view not found.")
+        if view.get("modelName") != "Issue":
+            raise ValueError("Linear view must be an issue view.")
+
+        self.user_repository.update_user_doc(user_id, {"linear_view_id": view["id"]})
+        return {"id": view["id"], "name": view["name"], "url": LinearClient.build_view_url(view)}
+
+    @staticmethod
+    def _view_id_candidates(view_ref: str) -> List[str]:
+        """
+        ビュー指定文字列から customView(id:) に渡す候補を返す。
+        URL (https://linear.app/<org>/view/<name>-<slugId>) の場合は末尾のセグメントと、
+        その最後のハイフン以降（slugId）を候補にする。
+        """
+        ref = view_ref.strip().split("?")[0].split("#")[0].rstrip("/")
+        if "/view/" in ref:
+            ref = ref.split("/view/", 1)[1].split("/")[0]
+        candidates = [ref]
+        if "-" in ref:
+            candidates.append(ref.rsplit("-", 1)[1])
+        return [c for c in candidates if c]
+
     def _get_decrypted_linear_api_key(self, user_id: str) -> Optional[str]:
         """
         Linear API キーを取得して復号化する。
@@ -135,6 +175,7 @@ class UserService(BaseService):
             "linear_api_key": user.linear_api_key,
             "linear_team_id": user.linear_team_id,
             "linear_user_id": user.linear_user_id,
+            "linear_view_id": user.linear_view_id,
             "llm_api_key": user.llm_api_key,
             "notion_api_key": user.notion_api_key,
             "notion_database_id": user.notion_database_id,

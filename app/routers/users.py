@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.models.request import UserRegisterRequest, LinearSetupRequest, UserConfigRequest, LLMSetupRequest
+from app.models.request import UserRegisterRequest, LinearSetupRequest, LinearViewSetupRequest, UserConfigRequest, LLMSetupRequest
 from app.models.response import UserConfigResponse
 from app.services.user_service import UserService
 from app.models.user import User
@@ -51,6 +51,19 @@ def setup_linear_integration(req: LinearSetupRequest, service: UserService = Dep
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 	
+@router.put("/users/linear-view")
+def setup_linear_view(req: LinearViewSetupRequest, service: UserService = Depends(get_user_service)) -> dict:
+	"""
+	日報の対象とする Linear ビューを登録する。ビューの URL をそのまま渡せる。
+	"""
+	user = service.get_user_by_line_user_id(req.line_user_id)
+	if not user:
+		raise HTTPException(status_code=404, detail="User not found")
+	try:
+		return service.setup_linear_view(user_id=user.id, view_ref=req.linear_view)
+	except ValueError as e:
+		raise HTTPException(status_code=400, detail=str(e))
+
 @router.put("/users/llm-setup")
 def setup_llm_integration(req: LLMSetupRequest, service: UserService = Depends(get_user_service)) -> User:
 	try:

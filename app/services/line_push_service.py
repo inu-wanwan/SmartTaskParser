@@ -69,9 +69,16 @@ class LinePushService(BaseService):
                 lines.append("")
 
         if not has_any:
-            return "📅 LINEAR DAILY FOCUS\n\n Progress\n ##########\n\n現在進行中のタスクはありません。"
+            message = "📅 LINEAR DAILY FOCUS\n\n Progress\n ##########\n\n現在進行中のタスクはありません。"
+        else:
+            message = "\n".join(lines).strip()
 
-        return "\n".join(lines).strip()
+        # 日報の元になった Linear ビューへのリンクを末尾に付ける
+        view_url = data.get("view_url")
+        if view_url:
+            message += f"\n\n🔗 {view_url}"
+
+        return message
 
     def push_daily_summary(self, user_id: str, grouped: Dict[str, List[Dict[str, Any]]]) -> None:
         """

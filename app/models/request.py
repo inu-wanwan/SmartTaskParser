@@ -13,6 +13,11 @@ class LinearSetupRequest(BaseModel):
     line_user_id: str
     linear_api_key: str
 
+class LinearViewSetupRequest(BaseModel):
+    line_user_id: str
+    # ビューの URL・slugId・ID のいずれか
+    linear_view: str
+
 class UserConfigRequest(BaseModel):
     line_user_id: str
 

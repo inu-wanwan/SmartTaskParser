@@ -155,15 +155,32 @@ class TaskService(BaseService):
     def get_daily_tasks_grouped_linear(self, user_config: Dict[str, Any]) -> Dict[str, Any]:
         """
         Linearの流儀に則り、優先度やステータス、サイクルに基づいてタスクを分類する。
+        ユーザー設定に Linear ビュー（linear_view_id）があればその課題を対象とし、
+        未設定または取得に失敗した場合は自分にアサインされた課題から現在のサイクル分を拾う。
         """
         linear_client = LinearClient(api_key=user_config.get("linear_api_key"), team_id=user_config.get("linear_team_id"), user_id=user_config.get("linear_user_id"))
         raw_data = linear_client.fetch_daily_summary()
 
-        assigned_issues = raw_data.get("user", {}).get("assignedIssues", {}).get("nodes", [])
-        team_data = raw_data.get("team", {})
+        team_data = raw_data.get("team") or {}
         active_cycle = team_data.get("activeCycle")
         active_cycle_id = active_cycle["id"] if active_cycle else None
-        triage_issues = team_data.get("issues", {}).get("nodes", [])
+        triage_issues = (team_data.get("issues") or {}).get("nodes", [])
+
+        view = None
+        view_id = user_config.get("linear_view_id")
+        if view_id:
+            try:
+                view = linear_client.fetch_custom_view(view_id)
+            except Exception as e:
+                # ビューが削除された場合などは日報自体は止めずに従来ロジックで送る
+                print(f"[WARN] Failed to fetch Linear view {view_id}; falling back to assigned issues: {e}")
+
+        if view:
+            issues = (view.get("issues") or {}).get("nodes", [])
+            view_url = LinearClient.build_view_url(view)
+        else:
+            issues = ((raw_data.get("user") or {}).get("assignedIssues") or {}).get("nodes", [])
+            view_url = None
 
         today = date.today()
 
@@ -173,10 +190,15 @@ class TaskService(BaseService):
             "in_progress": [],
             "current_cycle_todo": [],
             "triage": triage_issues,
+            "view_url": view_url,
         }
 
-        for issue in assigned_issues:
+        for issue in issues:
             state_type = issue["state"]["type"]
+            # ビューに完了済みが含まれていても、日報では残タスクのみを扱う
+            if state_type in ("completed", "canceled"):
+                continue
+
             priority = issue["priority"]
             due_str = issue.get("dueDate")
             due_date = date.fromisoformat(due_str) if due_str else None
@@ -189,9 +211,13 @@ class TaskService(BaseService):
                 grouped["in_progress"].append(issue)
                 continue
 
-            if active_cycle_id and issue.get("cycle") and issue["cycle"]["id"] == active_cycle_id:
-                if state_type == "unstarted":
-                    grouped["current_cycle_todo"].append(issue)
+            if state_type != "unstarted":
+                continue
+
+            # ビューの場合はサイクルの絞り込みをビュー側のフィルターに任せる
+            in_active_cycle = bool(active_cycle_id and issue.get("cycle") and issue["cycle"]["id"] == active_cycle_id)
+            if view or in_active_cycle:
+                grouped["current_cycle_todo"].append(issue)
 
         return grouped
 

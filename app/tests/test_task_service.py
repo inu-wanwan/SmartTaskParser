@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from datetime import date
 
+from app.clients.linear_client import LinearClient
 from app.services.task_service import TaskService
 
 
@@ -133,3 +134,85 @@ def test_get_daily_tasks_grouped_linear_groups_by_priority_state_and_cycle(servi
     assert [i["id"] for i in grouped["in_progress"]] == ["2"]
     assert [i["id"] for i in grouped["current_cycle_todo"]] == ["3"]
     assert [i["id"] for i in grouped["triage"]] == ["t1"]
+    assert grouped["view_url"] is None
+
+
+def _raw_daily_summary():
+    return {
+        "user": {
+            "assignedIssues": {
+                "nodes": [
+                    {"id": "a1", "title": "Not in view", "priority": 3, "dueDate": None,
+                     "state": {"type": "started"}, "cycle": None},
+                ]
+            }
+        },
+        "team": {
+            "activeCycle": {"id": "cycle-1", "name": "Current Cycle", "progress": 0.5},
+            "issues": {"nodes": [{"id": "t1", "title": "Triage item"}]},
+        },
+    }
+
+
+def test_get_daily_tasks_grouped_linear_uses_view_issues_and_url(service):
+    """
+    linear_view_id が設定されている場合、assignedIssues ではなくビューの課題を分類し、
+    ビューの URL を付与することを確認する。
+    """
+    view = {
+        "id": "view-1",
+        "name": "Current cycle for me",
+        "slugId": "abc123",
+        "modelName": "Issue",
+        "organization": {"urlKey": "example"},
+        "issues": {
+            "nodes": [
+                {"id": "v1", "title": "In progress", "priority": 3, "dueDate": None,
+                 "state": {"type": "started"}, "cycle": {"id": "cycle-1"}},
+                # 別チームのサイクルでも、ビューに含まれていれば NEXT に載せる
+                {"id": "v2", "title": "Todo", "priority": 3, "dueDate": None,
+                 "state": {"type": "unstarted"}, "cycle": {"id": "other-cycle"}},
+                {"id": "v3", "title": "Done", "priority": 1, "dueDate": None,
+                 "state": {"type": "completed"}, "cycle": {"id": "cycle-1"}},
+                {"id": "v4", "title": "Canceled", "priority": 3, "dueDate": None,
+                 "state": {"type": "canceled"}, "cycle": {"id": "cycle-1"}},
+            ]
+        },
+    }
+
+    mock_linear_client = MagicMock()
+    mock_linear_client.fetch_daily_summary.return_value = _raw_daily_summary()
+    mock_linear_client.fetch_custom_view.return_value = view
+
+    import app.services.task_service as ts_module
+
+    with patch.object(ts_module, "LinearClient", wraps=LinearClient) as mock_cls:
+        mock_cls.return_value = mock_linear_client
+        mock_cls.build_view_url = LinearClient.build_view_url
+        grouped = service.get_daily_tasks_grouped_linear(user_config={**USER_CONFIG, "linear_view_id": "view-1"})
+
+    mock_linear_client.fetch_custom_view.assert_called_once_with("view-1")
+    assert grouped["view_url"] == "https://linear.app/example/view/abc123"
+    assert grouped["urgent_overdue"] == []
+    assert [i["id"] for i in grouped["in_progress"]] == ["v1"]
+    assert [i["id"] for i in grouped["current_cycle_todo"]] == ["v2"]
+    assert [i["id"] for i in grouped["triage"]] == ["t1"]
+
+
+def test_get_daily_tasks_grouped_linear_falls_back_when_view_fetch_fails(service):
+    """
+    ビューの取得に失敗しても日報は止めず、assignedIssues で分類することを確認する。
+    """
+    mock_linear_client = MagicMock()
+    mock_linear_client.fetch_daily_summary.return_value = _raw_daily_summary()
+    mock_linear_client.fetch_custom_view.side_effect = Exception("Entity not found")
+
+    import app.services.task_service as ts_module
+
+    with patch.object(ts_module, "LinearClient", wraps=LinearClient) as mock_cls:
+        mock_cls.return_value = mock_linear_client
+        mock_cls.build_view_url = LinearClient.build_view_url
+        grouped = service.get_daily_tasks_grouped_linear(user_config={**USER_CONFIG, "linear_view_id": "deleted"})
+
+    assert grouped["view_url"] is None
+    assert [i["id"] for i in grouped["in_progress"]] == ["a1"]

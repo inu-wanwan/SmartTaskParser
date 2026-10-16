@@ -113,6 +113,35 @@ class LinearClient(BaseHTTPClient):
 		}
 		return self.execute(query, variables)
 	
+	def fetch_custom_view(self, view_id: str) -> Dict[str, Any]:
+		"""
+		カスタムビューの情報と、ビューのフィルターを適用した課題を取得する。
+		"""
+		query = """
+		query GetCustomView($viewId: String!) {
+		  customView(id: $viewId) {
+			id name slugId modelName
+			organization { urlKey }
+			issues(first: 100) {
+			  nodes {
+				id identifier title priority dueDate
+				state { type name }
+				cycle { id name progress }
+				project { name }
+			  }
+			}
+		  }
+		}
+		"""
+		return self.execute(query, {"viewId": view_id})["customView"]
+
+	@staticmethod
+	def build_view_url(view: Dict[str, Any]) -> str:
+		"""
+		カスタムビューの Web URL を組み立てる。
+		"""
+		return f"https://linear.app/{view['organization']['urlKey']}/view/{view['slugId']}"
+
 	def fetch_viewer_info(self) -> Dict[str, Any]:
 		"""
 		Viewer の情報を取得する。
