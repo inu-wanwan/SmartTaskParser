@@ -5,29 +5,46 @@ from datetime import datetime, date, timedelta
 from typing import Dict, Any, Optional
 from app.base.base_client import BaseClient
 import google.generativeai as genai
+from openai import OpenAI
 
 class LLMClient(BaseClient):
     """
-    Gemini API を呼び出すクライアントクラス。
+    LLM API を呼び出すクライアントクラス。
+    OpenAI を優先して呼び出し、失敗した場合は Gemini にフォールバックする。
     タスク抽出のためのプロンプト構築や、API 呼び出し、レスポンスの後処理などを担当する。
     """
 
-    def __init__(self, api_key: str, model_name: str = "gemini-2.5-flash"):
+    def __init__(
+        self,
+        api_key: Optional[str],
+        model_name: str = "gemini-2.5-flash",
+        openai_api_key: Optional[str] = None,
+        openai_model_name: Optional[str] = None,
+    ):
         super().__init__()
 
+        # OpenAI はサーバー共通の環境変数で設定する（未設定なら Gemini のみで動作）
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        self.openai_model_name = openai_model_name or os.getenv("OPENAI_MODEL", "gpt-5-mini")
+        self.openai_client = OpenAI(api_key=self.openai_api_key) if self.openai_api_key else None
+
+        # Gemini はユーザーごとに登録された API キーを使うフォールバック
         self.api_key = api_key or os.getenv("LLM_API_KEY")
-        if not self.api_key:
+        self.model = None
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+            self.model = genai.GenerativeModel(model_name)
+
+        if not self.openai_client and not self.model:
             raise ValueError("LLM API key is not set.")
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(model_name)
 
     def _validate_env(self) -> None:
-        # LLM_API_KEY は BaseClient の get_env_or_raise でチェックされるのでここでは不要
+        # API キーはコンストラクタで検証するのでここでは不要
         pass
 
     def parse_task_text(self, prompt: str, target: str = "linear") -> Dict[str, Any]:
         """
-        Gemini API を使って、日本語の自然文タスク文を Task JSON に変換する。
+        LLM を使って、日本語の自然文タスク文を Task JSON に変換する。
 
         Returns:
             dict: {
@@ -38,39 +55,64 @@ class LLMClient(BaseClient):
             }
         """
 
-        response = self.model.generate_content(prompt)
+        text = self._generate(prompt)
 
-        # Gemini は時々余計なテキストを返すので JSON 抽出が必要
-        json_dict = self._extract_json_from_response(response.text)
+        # LLM は時々余計なテキストを返すので JSON 抽出が必要
+        json_dict = self._extract_json_from_response(text)
 
         # 最終的に日付形式の整形
         date_key = "dueDate" if target == "linear" else "due_date"
         if date_key in json_dict:
             json_dict[date_key] = self._normalize_date(json_dict.get(date_key))
         return json_dict
+
+    def _generate(self, prompt: str) -> str:
+        """
+        OpenAI で生成し、失敗した場合（課金枠切れ・障害など）は Gemini で再試行する。
+        """
+        if self.openai_client:
+            try:
+                return self._generate_with_openai(prompt)
+            except Exception as e:
+                if not self.model:
+                    raise
+                print(f"[WARN] [LLMClient] OpenAI failed, falling back to Gemini: {e}")
+
+        return self.model.generate_content(prompt).text
+
+    def _generate_with_openai(self, prompt: str) -> str:
+        response = self.openai_client.chat.completions.create(
+            model=self.openai_model_name,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("OpenAI response is empty.")
+        return content
     
     def _extract_json_from_response(self, text: str) -> Dict[str, Any]:
         """
-        Gemini の回答から JSON 部分のみ抽出。
+        LLM の回答から JSON 部分のみ抽出。
         JSON をパースして dict にする。
         """
 
         # { ... } を全部抜き出す（最初の JSON を使う）
         match = re.search(r"\{[\s\S]*\}", text)
         if not match:
-            raise ValueError(f"Gemini response does not contain JSON: {text}")
+            raise ValueError(f"LLM response does not contain JSON: {text}")
 
         json_str = match.group(0)
 
         try:
             return json.loads(json_str)
         except json.JSONDecodeError:
-            raise ValueError(f"Invalid JSON returned from Gemini: {json_str}")
+            raise ValueError(f"Invalid JSON returned from LLM: {json_str}")
         
     def _normalize_date(self, value: Optional[str]) -> Optional[str]:
         """
         - "2025-01-20" など正規の ISO ならそのまま
-        - "明日" "金曜" などを Gemini が返す場合 → 補正
+        - "明日" "金曜" などを LLM が返す場合 → 補正
         - null / 空 なら None
         """
 
@@ -84,12 +126,12 @@ class LLMClient(BaseClient):
         except ValueError:
             pass
 
-        # Gemini が相対語を残してしまった場合の保険
+        # LLM が相対語を残してしまった場合の保険
         return self._parse_relative_date(value)
     
     def _parse_relative_date(self, s: str) -> Optional[str]:
         """
-        Gemini の返した日付が「明日」などだった場合の救済処理。
+        LLM の返した日付が「明日」などだった場合の救済処理。
         主要な相対表現だけカバーしておく。
         """
 

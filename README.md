@@ -1,12 +1,12 @@
 # SmartTaskParser
 
-LINE + Gemini + Linear で自然文のタスク登録を自動化する FastAPI アプリです。
-LINE で送った日本語テキストを Gemini が解析し、Linear Issue として登録します。
+LINE + LLM (OpenAI / Gemini) + Linear で自然文のタスク登録を自動化する FastAPI アプリです。
+LINE で送った日本語テキストを LLM が解析し、Linear Issue として登録します。
 
 ## Features
 
 - LINE Webhook から自然文タスクを受信
-- Gemini (`gemini-2.5-flash`) でタイトル・期限・優先度・カテゴリを抽出
+- OpenAI (`gpt-5-mini`) でタイトル・期限・優先度・カテゴリを抽出
 - Linear API で Issue を作成
 - 作成した Issue URL を LINE に返信
 - 日次サマリーを LINE Push 送信 (`/daily/push`)
@@ -16,7 +16,8 @@ LINE で送った日本語テキストを Gemini が解析し、Linear Issue と
 
 - Python / FastAPI
 - LINE Messaging API (`line-bot-sdk`)
-- Gemini API (`google-generativeai`)
+- OpenAI API (`openai`)
+- Gemini API (`google-generativeai`、OpenAI 失敗時のフォールバック)
 - Linear GraphQL API
 - Notion API (一部取得系で利用)
 
@@ -63,7 +64,11 @@ pip install -r requirements.txt
 `.env` を作成して以下を設定してください。
 
 ```env
-# Gemini
+# OpenAI（優先して使用。OPENAI_MODEL は省略時 gpt-5-mini）
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-5-mini
+
+# Gemini（OpenAI 失敗時のフォールバック。ユーザー登録のキーが優先）
 LLM_API_KEY=your_gemini_api_key
 
 # LINE

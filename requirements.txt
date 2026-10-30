@@ -3,6 +3,7 @@ uvicorn[standard]
 httpx
 python-dotenv
 google-generativeai
+openai
 notion-client
 line-bot-sdk
 pydantic
