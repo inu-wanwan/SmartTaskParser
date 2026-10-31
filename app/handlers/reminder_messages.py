@@ -18,6 +18,9 @@ ACTION_CANCEL = "cancel"
 ACTION_SHIFT = "shift"
 ACTION_TO_TASK = "to_task"
 ACTION_TO_REMINDER = "to_reminder"
+# リッチメニューのボタン
+ACTION_MENU_REMINDER = "menu_reminder"
+ACTION_MENU_LIST = "menu_list"
 
 POSTBACK_TEXT_LIMIT = 200  # 付け替え用に持たせる元の文の上限
 QUICK_REPLY_MAX_ITEMS = 13  # LINE のクイックリプライの上限
@@ -129,4 +132,16 @@ def fmt_upcoming(reminders: List[Reminder]) -> str:
 TIME_UNKNOWN_MESSAGE = (
     "時刻が読み取れなかったので、リマインドは登録していません。\n"
     "「リマインド 18時 洗濯物」のように時刻を入れて送り直してください。"
+)
+
+REMINDER_MODE_MINUTES = 5  # [リマインド] を押してから、この時間内の1通をリマインドとして扱う
+
+REMINDER_MODE_PROMPT = (
+    "何をリマインドしますか？\n"
+    "例: 19時 薬 / 明日15時 渋谷で打ち合わせ"
+)
+
+REMINDER_MODE_RETRY_MESSAGE = (
+    "時刻が読み取れませんでした。時刻を入れてもう一度送ってください。\n"
+    "例: 19時 薬"
 )

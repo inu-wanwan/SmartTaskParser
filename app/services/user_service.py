@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, Dict, Any, List
 from app.base.base_service import BaseService
 from app.models.user import User
@@ -181,6 +182,7 @@ class UserService(BaseService):
             "notion_database_id": user.notion_database_id,
             "pushover_user_key": user.pushover_user_key,
             "departure_buffer_min": user.departure_buffer_min,
+            "reminder_mode_until": user.reminder_mode_until,
         }
     
     def get_user_config_by_line_user_id(self, line_user_id: str) -> Dict[str, Any]:
@@ -212,3 +214,10 @@ class UserService(BaseService):
         if not 0 < minutes <= 240:
             raise ValueError("出発余裕は1〜240分で指定してください。")
         self.user_repository.update_user_doc(user_id, {"departure_buffer_min": minutes})
+
+    def set_reminder_mode(self, user_id: str, until: Optional[datetime]) -> None:
+        """
+        リッチメニューの [リマインド] が押されたときに、次の1通をリマインドとして扱う期限を記録する。
+        None で解除する。Cloud Run は複数インスタンスになりうるので Firestore に持つ。
+        """
+        self.user_repository.update_user_doc(user_id, {"reminder_mode_until": until})

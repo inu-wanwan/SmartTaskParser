@@ -6,7 +6,7 @@ from linebot import LineBotApi, WebhookParser
 from linebot.models import MessageEvent, PostbackEvent, TextMessage, TextSendMessage, FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, ButtonComponent, URIAction
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from linebot.exceptions import InvalidSignatureError
 from app.services.task_service import TaskService
@@ -122,8 +122,11 @@ def _handle_text_message(
         return
 
     now = datetime.now(JST)
-    result = reminder_service.classify(text, user_config, now=now)
-    print(f"[INFO] Intent: {result.intent} (forced={result.forced})")
+    # リッチメニューの [リマインド] を押した直後の1通は、文頭に「リマインド」があるのと同じ扱い
+    in_reminder_mode = _in_reminder_mode(user_config, now)
+    classify_text = f"{FORCE_REMINDER_PREFIX} {text}" if in_reminder_mode else text
+    result = reminder_service.classify(classify_text, user_config, now=now)
+    print(f"[INFO] Intent: {result.intent} (forced={result.forced}, menu_mode={in_reminder_mode})")
 
     if result.intent == INTENT_REMINDER:
         try:
@@ -137,8 +140,15 @@ def _handle_text_message(
             )
         except ReminderTimeError as e:
             print(f"[INFO] Reminder time unresolved: {e}")
-            _reply(event, msg.TIME_UNKNOWN_MESSAGE)
+            if in_reminder_mode:
+                # 送り直しやすいよう、モードを延長してもう一度入力してもらう
+                _start_reminder_mode(user_service, user.id, now)
+                _reply(event, msg.REMINDER_MODE_RETRY_MESSAGE)
+            else:
+                _reply(event, msg.TIME_UNKNOWN_MESSAGE)
             return
+        if in_reminder_mode:
+            user_service.set_reminder_mode(user.id, None)
         _reply(
             event,
             msg.fmt_reminder_registered(reminder, now, has_pushover=bool(user_config.get("pushover_user_key"))),
@@ -187,6 +197,15 @@ def _create_task(task_service: TaskService, text: str, user_config: Dict[str, An
         raise
 
 
+def _in_reminder_mode(user_config: Dict[str, Any], now: datetime) -> bool:
+    until = user_config.get("reminder_mode_until")
+    return bool(until) and until > now
+
+
+def _start_reminder_mode(user_service: UserService, user_id: str, now: datetime) -> None:
+    user_service.set_reminder_mode(user_id, now + timedelta(minutes=msg.REMINDER_MODE_MINUTES))
+
+
 DEPARTURE_BUFFER_PATTERN = re.compile(r"出発余裕\s*(\d+)\s*分?")
 
 
@@ -232,6 +251,16 @@ def _handle_postback(
     action, args = msg.parse_postback(event.postback.data or "")
     print(f"[INFO] LINE postback: action={action}, args={args}")
     now = datetime.now(JST)
+
+    if action == msg.ACTION_MENU_REMINDER:
+        _start_reminder_mode(user_service, user.id, now)
+        _reply(event, msg.REMINDER_MODE_PROMPT)
+        return
+
+    if action == msg.ACTION_MENU_LIST:
+        upcoming = reminder_service.list_upcoming(user.id)
+        _reply(event, msg.fmt_upcoming(upcoming), quick_reply=msg.upcoming_quick_reply(upcoming))
+        return
 
     if action == msg.ACTION_CANCEL and args:
         reminder = reminder_service.cancel(args[0], user.id)

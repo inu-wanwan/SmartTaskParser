@@ -184,3 +184,57 @@ def test_postback_data_fits_line_limit():
     task = Task(title="t", issue_id="2b869893-cf8f-806c-867a-c37e24f3fd31")
     qr = msg.task_quick_reply(task, "あ" * 500)
     assert len(qr.items[0].action.data) <= 300
+
+
+# --- リッチメニュー -----------------------------------------------------------
+
+def test_menu_reminder_button_starts_mode(deps):
+    lh._handle_postback(postback_event("menu_reminder"), deps.task_service, deps.user_service, deps.reminder_service)
+    until = deps.user_service.set_reminder_mode.call_args.args[1]
+    assert deps.user_service.set_reminder_mode.call_args.args[0] == "u1"
+    assert until > datetime.now(JST)
+    assert replied_text(deps.api) == msg.REMINDER_MODE_PROMPT
+
+
+def test_menu_list_button_shows_upcoming_with_cancel_buttons(deps):
+    deps.reminder_service.list_upcoming.return_value = [make_reminder()]
+    lh._handle_postback(postback_event("menu_list"), deps.task_service, deps.user_service, deps.reminder_service)
+    assert "今後24時間のリマインド" in replied_text(deps.api)
+    assert replied_quick_reply_labels(deps.api) == ["取消: 渋谷で打ち合わせ"]
+
+
+def _with_mode(deps, until):
+    deps.user_service.get_user_config.return_value = {**USER_CONFIG, "reminder_mode_until": until}
+
+
+def test_message_in_reminder_mode_is_forced_and_clears_mode(deps):
+    _with_mode(deps, datetime(2099, 1, 1, tzinfo=JST))
+    deps.reminder_service.classify.return_value = IntakeResult("reminder", {}, "19時 薬", True)
+    deps.reminder_service.create_reminder.return_value = make_reminder()
+
+    lh._handle_text_message(text_event("19時 薬"), deps.task_service, deps.user_service, deps.reminder_service)
+
+    assert deps.reminder_service.classify.call_args.args[0] == "リマインド 19時 薬"
+    deps.user_service.set_reminder_mode.assert_called_once_with("u1", None)
+    deps.task_service.create_task_from_text.assert_not_called()
+
+
+def test_reminder_mode_extends_when_time_unknown(deps):
+    _with_mode(deps, datetime(2099, 1, 1, tzinfo=JST))
+    deps.reminder_service.classify.return_value = IntakeResult("reminder", {}, "薬", True)
+    deps.reminder_service.create_reminder.side_effect = ReminderTimeError("時刻なし")
+
+    lh._handle_text_message(text_event("薬"), deps.task_service, deps.user_service, deps.reminder_service)
+
+    assert replied_text(deps.api) == msg.REMINDER_MODE_RETRY_MESSAGE
+    assert deps.user_service.set_reminder_mode.call_args.args[1] is not None
+
+
+def test_expired_reminder_mode_is_ignored(deps):
+    _with_mode(deps, datetime(2000, 1, 1, tzinfo=JST))
+    deps.reminder_service.classify.return_value = IntakeResult("task", {}, "スライド直す", False)
+
+    lh._handle_text_message(text_event("スライド直す"), deps.task_service, deps.user_service, deps.reminder_service)
+
+    assert deps.reminder_service.classify.call_args.args[0] == "スライド直す"
+    deps.task_service.create_task_from_text.assert_called_once()
