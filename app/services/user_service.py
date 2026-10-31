@@ -179,6 +179,8 @@ class UserService(BaseService):
             "llm_api_key": user.llm_api_key,
             "notion_api_key": user.notion_api_key,
             "notion_database_id": user.notion_database_id,
+            "pushover_user_key": user.pushover_user_key,
+            "departure_buffer_min": user.departure_buffer_min,
         }
     
     def get_user_config_by_line_user_id(self, line_user_id: str) -> Dict[str, Any]:
@@ -197,3 +199,16 @@ class UserService(BaseService):
         Notion/LLM のキーはこの処理で使用しないため、復号も返却もしない。
         """
         return self.user_repository.get_all_users(decrypt_fields={"linear_api_key"})
+
+    # --- リマインド関連の設定 ---
+
+    def setup_pushover(self, user_id: str, user_key: str) -> None:
+        """
+        Pushover のユーザーキーを暗号化して保存する（検証は呼び出し側で行う）。
+        """
+        self.user_repository.update_user_doc(user_id, {"pushover_user_key": encrypt_key(user_key)})
+
+    def set_departure_buffer(self, user_id: str, minutes: int) -> None:
+        if not 0 < minutes <= 240:
+            raise ValueError("出発余裕は1〜240分で指定してください。")
+        self.user_repository.update_user_doc(user_id, {"departure_buffer_min": minutes})

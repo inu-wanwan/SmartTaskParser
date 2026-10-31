@@ -33,9 +33,10 @@ async def line_webhook(request: Request):
     signature = request.headers.get("X-Line-Signature", "")
     task_service = request.app.state.task_service
     user_service = request.app.state.user_service
+    reminder_service = getattr(request.app.state, "reminder_service", None)
 
     try:
-        line_handlers.handle_line_webhook(body_str, signature, task_service, user_service)
+        line_handlers.handle_line_webhook(body_str, signature, task_service, user_service, reminder_service)
     except InvalidSignatureError:
         # 本番用：署名がおかしい場合は 400
         print("[WARN] Invalid LINE signature")

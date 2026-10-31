@@ -73,6 +73,14 @@ class LinePushService(BaseService):
         else:
             message = "\n".join(lines).strip()
 
+        # 今日鳴る予定のリマインド
+        reminders = data.get("reminders") or []
+        if reminders:
+            lines_r = ["⏰[TODAY'S REMINDERS]"]
+            for r in reminders:
+                lines_r.append(f"- {r.fire_at.astimezone(JST):%H:%M} {r.label}: {r.title}")
+            message += "\n\n" + "\n".join(lines_r)
+
         # 日報の元になった Linear ビューへのリンクを末尾に付ける
         view_url = data.get("view_url")
         if view_url:

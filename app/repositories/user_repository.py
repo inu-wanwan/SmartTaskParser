@@ -14,6 +14,7 @@ class UserRepository:
         "notion_api_key",
         "llm_api_key",
         "linear_api_key",
+        "pushover_user_key",
     })
 
     def __init__(self, key_path: str = "firebase_key.json"):

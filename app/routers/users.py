@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.models.request import UserRegisterRequest, LinearSetupRequest, LinearViewSetupRequest, UserConfigRequest, LLMSetupRequest
+from app.models.request import UserRegisterRequest, LinearSetupRequest, LinearViewSetupRequest, UserConfigRequest, LLMSetupRequest, PushoverSetupRequest
+from app.clients.pushover_client import PushoverClient
 from app.models.response import UserConfigResponse
 from app.services.user_service import UserService
 from app.models.user import User
@@ -80,3 +81,20 @@ def setup_llm_integration(req: LLMSetupRequest, service: UserService = Depends(g
 		return user
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
+
+@router.put("/users/pushover-setup")
+def setup_pushover(req: PushoverSetupRequest, service: UserService = Depends(get_user_service)) -> dict:
+	"""
+	リマインドの送り先になる Pushover のユーザーキーを登録する。
+	"""
+	user = service.get_user_by_line_user_id(req.line_user_id)
+	if not user:
+		raise HTTPException(status_code=404, detail="User not found")
+	try:
+		client = PushoverClient()
+	except ValueError as e:
+		raise HTTPException(status_code=500, detail=str(e))
+	if not client.validate_user(req.pushover_user_key):
+		raise HTTPException(status_code=400, detail="Invalid Pushover user key")
+	service.setup_pushover(user_id=user.id, user_key=req.pushover_user_key)
+	return {"status": "ok"}

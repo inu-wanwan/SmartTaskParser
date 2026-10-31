@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService, get_line_push_service
 from app.services.user_service import UserService
+from app.services.reminder_service import ReminderService
+from datetime import datetime
+from app.utils.reminder_time import JST
 
 router = APIRouter()
 
@@ -29,12 +32,19 @@ def get_user_service(request: Request):
     """
     return request.app.state.user_service
 
+def get_reminder_service(request: Request) -> ReminderService:
+    """
+    FastAPI の Depends で ReminderService を注入するための関数。
+    """
+    return request.app.state.reminder_service
+
 @router.post("/daily/push")
 def daily_push(
     cron_token: str = Header(... , alias="X-Cron-Token"),
     task_service: TaskService = Depends(get_task_service),
     line_push_service: LinePushService = Depends(get_line_push_service),
-    user_service: UserService = Depends(get_user_service)
+    user_service: UserService = Depends(get_user_service),
+    reminder_service: ReminderService = Depends(get_reminder_service),
 ):
     """
     デイリータスクサマリーを LINE にプッシュ送信するエンドポイント。
@@ -53,6 +63,7 @@ def daily_push(
         
         try:
             grouped_tasks = task_service.get_daily_tasks_grouped_linear(user_config=user_config)
+            grouped_tasks["reminders"] = _todays_reminders(reminder_service, user_config)
             line_push_service.push_daily_summary(user_id=line_user_id, grouped=grouped_tasks)
             results.append({"user_id": line_user_id, "status": "success"})
         except ValueError as e:
@@ -65,3 +76,17 @@ def daily_push(
             raise HTTPException(status_code=500, detail="Internal Server Error")
         
     return {"results": results}
+
+
+def _todays_reminders(reminder_service, user_config) -> list:
+    """
+    日報に載せる今日のリマインド。取得に失敗しても日報自体は送る。
+    """
+    user_id = user_config.get("id")
+    if not user_id or not isinstance(reminder_service, ReminderService):
+        return []
+    try:
+        return reminder_service.list_for_day(user_id, datetime.now(JST))
+    except Exception as e:
+        print(f"[WARN] Failed to load reminders for daily push: user_id={user_id}, error={e}")
+        return []

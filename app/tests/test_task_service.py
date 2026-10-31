@@ -37,7 +37,10 @@ def test_create_task_from_text_uses_llm_and_linear(service):
     }
 
     mock_linear_client = MagicMock()
-    mock_linear_client.create_linear_issue.return_value = "https://linear.app/example/issue/ABC-123"
+    mock_linear_client.create_linear_issue_detail.return_value = {
+        "id": "issue-uuid-123",
+        "url": "https://linear.app/example/issue/ABC-123",
+    }
 
     mock_linear_service = MagicMock()
     mock_linear_service.get_project_context.return_value = "プロジェクト一覧:\n- Research: 研究関連"
@@ -72,6 +75,7 @@ def test_create_task_from_text_uses_llm_and_linear(service):
     assert task.user_id == "test-user"
     assert task.project_id == "484c0d7b-f027-4a08-b433-6e9984b50436"
     assert task.page_url == "https://linear.app/example/issue/ABC-123"
+    assert task.issue_id == "issue-uuid-123"
 
     # ensure_synced が get_project_context より先に呼ばれていることを確認
     call_order = mock_linear_service.method_calls

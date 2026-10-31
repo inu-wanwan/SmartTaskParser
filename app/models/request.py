@@ -24,3 +24,7 @@ class UserConfigRequest(BaseModel):
 class LLMSetupRequest(BaseModel):
     line_user_id: str
     llm_api_key: str
+
+class PushoverSetupRequest(BaseModel):
+    line_user_id: str
+    pushover_user_key: str

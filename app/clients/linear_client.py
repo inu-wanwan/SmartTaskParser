@@ -53,6 +53,28 @@ class LinearClient(BaseHTTPClient):
 		"""
 		Linear API を呼び出して新しい Issue を作成し、URLを返す。
 		"""
+		return self.create_linear_issue_detail(
+			title=title,
+			due_date=due_date,
+			priority=priority,
+			notes=notes,
+			project_id=project_id,
+			state_id=state_id,
+		)["url"]
+
+	def create_linear_issue_detail(
+		self,
+		title: str,
+		due_date: Optional[date] = None,
+		priority: int = 0,
+		notes: Optional[str] = None,
+		project_id: Optional[str] = None,
+		state_id: Optional[str] = None,
+	) -> Dict[str, str]:
+		"""
+		Issue を作成し、{"id": ..., "url": ...} を返す。
+		リマインドと紐づけるために Issue の ID も必要な場合はこちらを使う。
+		"""
 		if not self.team_id or not self.user_id:
 			raise ValueError("Team ID and User ID must be set to create an issue.")
 
@@ -80,8 +102,33 @@ class LinearClient(BaseHTTPClient):
 			}
 		}
 		data = self.execute(query, variables)
-		issue_url = data["issueCreate"]["issue"]["url"]
-		return issue_url
+		issue = data["issueCreate"]["issue"]
+		return {"id": issue["id"], "url": issue["url"]}
+
+	def fetch_issue_state_type(self, issue_id: str) -> Optional[str]:
+		"""
+		Issue の状態の種類（backlog / unstarted / started / completed / canceled など）を返す。
+		"""
+		query = """
+		query IssueState($id: String!) {
+		  issue(id: $id) { id state { type } }
+		}
+		"""
+		data = self.execute(query, {"id": issue_id})
+		issue = data.get("issue") or {}
+		return (issue.get("state") or {}).get("type")
+
+	def archive_issue(self, issue_id: str) -> bool:
+		"""
+		Issue をアーカイブする（タスクとして登録したものをリマインドに付け替えたとき）。
+		"""
+		query = """
+		mutation ArchiveIssue($id: String!) {
+		  issueArchive(id: $id) { success }
+		}
+		"""
+		data = self.execute(query, {"id": issue_id})
+		return bool((data.get("issueArchive") or {}).get("success"))
 				
 	def fetch_daily_summary(self) -> Dict[str, Any]:
 		"""

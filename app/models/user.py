@@ -11,3 +11,6 @@ class User(BaseModel):
     llm_api_key: Optional[str] = None
     notion_api_key: Optional[str] = None
     notion_database_id: Optional[str] = None
+    # リマインド関連
+    pushover_user_key: Optional[str] = None
+    departure_buffer_min: Optional[int] = None

@@ -66,6 +66,13 @@ class LLMClient(BaseClient):
             json_dict[date_key] = self._normalize_date(json_dict.get(date_key))
         return json_dict
 
+    def parse_json(self, prompt: str) -> Dict[str, Any]:
+        """
+        プロンプトを投げて、返ってきた JSON を dict にして返す（後処理なし）。
+        振り分け・リマインド抽出など、タスク以外の用途で使う。
+        """
+        return self._extract_json_from_response(self._generate(prompt))
+
     def _generate(self, prompt: str) -> str:
         """
         OpenAI で生成し、失敗した場合（課金枠切れ・障害など）は Gemini で再試行する。

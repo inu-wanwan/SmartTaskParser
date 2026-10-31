@@ -8,9 +8,11 @@ import uvicorn
 from app.services.task_service import TaskService
 from app.services.line_push_service import LinePushService
 from app.prompts.linear import LinearPromptBuilder
-from app.routers import line_webhook, tasks, daily, users
+from app.routers import line_webhook, tasks, daily, users, reminders
 from app.repositories.user_repository import UserRepository
 from app.services.user_service import UserService
+from app.services.reminder_service import ReminderService
+from app.repositories.reminder_repository import ReminderRepository
 
 # Firebase の初期化は UserRepository が担当する。
 # ローカルは firebase_key.json、Cloud Run は ADC（Application Default Credentials）を使用。
@@ -32,11 +34,18 @@ def create_app() -> FastAPI:
     
     line_push_service = LinePushService()
 
+    # リマインド（Firestore の初期化は UserRepository 側で済んでいる）
+    reminder_service = ReminderService(
+        reminder_repository=ReminderRepository(db=user_repo.db),
+        user_repository=user_repo,
+    )
+
     # 2. アプリの状態 (state) にインスタンスを登録
     app.state.user_repo = user_repo
     app.state.user_service = user_service
     app.state.task_service = task_service
     app.state.line_push_service = line_push_service
+    app.state.reminder_service = reminder_service
 
     # 3. ミドルウェア設定
     app.add_middleware(
@@ -52,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(daily.router)
     app.include_router(users.router)
+    app.include_router(reminders.router)
 
     @app.get("/health")
     def health_check():

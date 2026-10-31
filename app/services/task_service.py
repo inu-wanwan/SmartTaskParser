@@ -68,7 +68,7 @@ class TaskService(BaseService):
             state_id=state_id,
         )
 
-        page_url = linear_client.create_linear_issue(
+        issue = linear_client.create_linear_issue_detail(
             title=task.title,
             due_date=task.due_date,
             priority=task.priority,
@@ -77,7 +77,8 @@ class TaskService(BaseService):
             state_id=task.state_id,
         )
 
-        task.page_url = page_url
+        task.page_url = issue.get("url")
+        task.issue_id = issue.get("id")
 
         return task
 
